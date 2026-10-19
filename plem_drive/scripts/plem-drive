@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2025-2026 WIM Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Console entrypoint — `plem-drive <verb>` (`plem drive <verb>` through the plem
+command), installed in bin/ and on the PATH once the workspace is sourced.
+
+The implementation is ``plem.drive.cli.main``.
+"""
+
+from plem.drive.cli import main
+
+if __name__ == "__main__":
+    raise SystemExit(main())

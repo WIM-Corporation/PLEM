@@ -1,0 +1,7 @@
+<library path="plem_drive_plugins">
+  <class name="plem_drive/StreamController"
+         type="plem::drive::ros::StreamController"
+         base_class_type="controller_interface::ControllerInterface">
+    <description>Forwards a command stream to csv and cst axes; lets go of it 50 ms after it stops.</description>
+  </class>
+</library>

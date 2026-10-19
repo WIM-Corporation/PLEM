@@ -1,0 +1,7 @@
+<library path="plem_drive_plugins">
+  <class name="plem_drive/DriveSystemInterface"
+         type="plem::drive::ros::DriveSystemInterface"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>One CiA 402 drive bus (a drive model file) as ros2_control hardware.</description>
+  </class>
+</library>

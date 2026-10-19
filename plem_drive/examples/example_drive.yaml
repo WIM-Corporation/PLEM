@@ -1,0 +1,45 @@
+# A starting point for your own drive model file: one position (`csp`) axis on
+# one CiA 402 (CoE) servo drive. Every value is SYNTHETIC: none was measured on
+# a drive or taken from a manual. Keep the shape and replace every value with
+# your drive's.
+#
+# Axis values (limits) are at the axis: rad, rad/s, rad/s². Drive values
+# (startup_sdo, zero_offset_count) are the drive's raw units at the motor.
+#
+# Read next: README.md beside this file (how to start), docs/getting-started.md
+# (check, bench and run), docs/cia402-drive-model.md (what every key means).
+# Not approved: `plem drive run` offers the bench on a terminal.
+schema: cia402_drive/v1
+model: { name: example_drive }
+bus: { name: my_drive, cycle_time_ns: 1000000, sync_mode: drive_default }  # runs as /my_drive
+fault_reset: { policy: none, pulse_ms: 0 }
+slaves:
+  - ring_position: 0
+    vendor_id: 0x00c0ffee        # yours: `ethercat slaves -v`
+    product_code: 0x00001001     # yours: `ethercat slaves -v`
+    pdo_mapping: scanned         # use the drive's own mapping, read at start
+    # How the drive stops on its own (Quick stop, Disable operation). Set the
+    # decelerations for your drive and load; the drive's units are counts/s²
+    # at the motor (here 1000 rad/s² for a 23-bit encoder).
+    startup_sdo:
+      - { index: 0x605a, subindex: 0, size: 2, value: 2 }           # Quick stop option: slow down, then Switch on disabled
+      - { index: 0x605c, subindex: 0, size: 2, value: 1 }           # Disable operation option: slow down
+      - { index: 0x6084, subindex: 0, size: 4, value: 1335088429 }  # Profile deceleration
+      - { index: 0x6085, subindex: 0, size: 4, value: 1335088429 }  # Quick stop deceleration
+    axes:
+      - name: joint0
+        channel: 1
+        mode: csp
+        mode_display_timing: pre_enable     # the default; post_enable if 0x6061 shows the mode only after enable
+        factors:
+          gear_ratio: 50.0             # motor turns per axis turn
+          encoder_resolution: 8388608  # counts per motor turn (23-bit)
+          torque: { unit: rated_per_mille, motor_rated_torque_nm: 1.0 }
+          velocity: { velocity_factor: 1.0 }
+        flip: false
+        zero_offset_count: 0         # the drive's count at your zero: measure yours
+        error_code_pdo: null         # or the 0x603F entry, if mapped
+        limits:
+          position: { min_rad: -3.0, max_rad: 3.0 }
+          velocity_rad_s: 2.0          # a protective stop above it: leave room for overshoot
+          acceleration_rad_s2: 15.0    # stop ramp; below the drive's 6085h (20 rad/s² here)

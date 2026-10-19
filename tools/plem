@@ -1,0 +1,79 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2025-2026 WIM Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# plem — the PLEM command: `plem <command> [arguments]` runs the installed
+# `plem-<command>` executable with the arguments unchanged. The commands are
+# whatever plem-* executables PATH holds, so they depend on the installed
+# packages; the dispatcher checks nothing else.
+#
+#   plem                    runs plem-default when installed, else lists the commands
+#   plem --help | -h | help lists the commands (each command has its own --help)
+#   plem <command> ...      exec plem-<command>; 127 when it is not installed
+#
+# A command name is lower-case letters, digits and '-'. The first plem-<command>
+# on PATH answers, as it would typed directly. The list shows every such
+# executable except plem-default, service and helper programs included: there is
+# no second list of "user" commands to keep in step with the packages.
+set -u
+
+TAB=$(printf '\t')
+
+# Every plem-<command> on PATH as "<command><TAB><path>", the first on PATH per command.
+installed() {
+    printf '%s\n' "$PATH" | tr ':' '\n' | while IFS= read -r dir; do
+        [ -n "$dir" ] || continue
+        for path in "$dir"/plem-*; do
+            if [ ! -f "$path" ] || [ ! -x "$path" ]; then continue; fi
+            name=${path##*/plem-}
+            case $name in '' | -* | *[!a-z0-9-]*) continue ;; esac
+            printf '%s\t%s\n' "$name" "$path"
+        done
+    done | awk -F "$TAB" '!seen[$1]++'
+}
+
+# The path of plem-<$1>, empty when it is not installed.
+lookup() {
+    installed | awk -F "$TAB" -v c="$1" '$1 == c { print $2 }'
+}
+
+usage() {
+    commands=$(installed | cut -f1 | grep -vx default | sort)   # plem-default is what bare `plem` runs, not a command
+    echo "usage: plem <command> [arguments]"
+    echo
+    if [ -n "$commands" ]; then
+        echo "Commands on this device:"
+        printf '%s\n' "$commands" | sed 's/^/  /'
+    else
+        echo "No plem commands are installed on this device."
+    fi
+    echo
+    echo "The commands depend on the installed packages. 'plem <command> --help' shows"
+    echo "a command's own help; 'plem' alone runs plem-default when it is installed."
+}
+
+case ${1-} in
+    "")
+        default=$(lookup default)
+        [ -n "$default" ] && exec "$default"
+        usage
+        exit 0
+        ;;
+    -h | --help | help)
+        usage
+        exit 0
+        ;;
+    -*)
+        echo "plem: unknown option '$1' — usage: plem <command> [arguments] (plem --help lists the commands)" >&2
+        exit 2
+        ;;
+esac
+
+command=$1
+shift
+path=$(lookup "$command")
+if [ -z "$path" ]; then
+    echo "plem $command: not installed on this device (no plem-$command)" >&2
+    exit 127
+fi
+exec "$path" "$@"

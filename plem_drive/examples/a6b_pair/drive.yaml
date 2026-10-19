@@ -1,0 +1,97 @@
+# Two Panasonic MINAS A6B drives on one bus, one cyclic synchronous position
+# (`csp`) axis each. Each motor drives a 21:1 gearhead. Axis values (`limits`,
+# the commands, `joint_states`) are rad, rad/s and N·m at the gearhead output;
+# drive values (`startup_sdo`, `stored_sdo`, `zero_offset_count`) are raw drive
+# units (positions count at the motor), and `dc` is timing. Not approved as
+# shipped: measure the values marked "measure yours", check each drive, then
+# bench the file (`plem drive run drive.yaml`).
+#   README.md beside this file            steps to run it, where every value
+#                                         comes from, and how to adapt it to
+#                                         your drives
+#   docs/cia402-drive-model.md            what each key means ("schema")
+schema: cia402_drive/v1
+model: { name: a6b_pair }
+# Runs as /a6b_pair; 1 ms cycle on distributed clocks (SYNC0). The name is not
+# in the approval.
+bus: { name: a6b_pair, cycle_time_ns: 1000000, sync_mode: dc_sync0 }
+fault_reset: { policy: none, pulse_ms: 0 }
+# No cia402_profile: the standard CiA 402 transition table (schema §4.8).
+slaves:
+  # Both drives: the same drive, motor and gearhead, so one entry lists both
+  # ring positions; name, flip and zero_offset_count take one value per drive.
+  - ring_position: [0, 1]
+    vendor_id: 0x0000066f        # EtherCAT vendor ID (1018h:01)
+    product_code: 0x60380009     # MDDLN55BE; yours: `ethercat slaves -v`
+    # Declared mapping (RxPDO 1600h, TxPDO 1A01h); PLEM writes it in PREOP.
+    pdo_mapping:
+      sync_managers:
+        - sm: 2
+          direction: output
+          watchdog: true
+          pdos:
+            - index: 0x1600
+              entries:
+                - { index: 0x6040, subindex: 0, bits: 16 }   # Controlword
+                - { index: 0x6060, subindex: 0, bits: 8 }    # Modes of operation
+                - { index: 0x607a, subindex: 0, bits: 32 }   # Target position
+                - { index: 0x60b8, subindex: 0, bits: 16 }   # Touch probe function (stays 0)
+        - sm: 3
+          direction: input
+          watchdog: false
+          pdos:
+            - index: 0x1a01
+              entries:
+                - { index: 0x603f, subindex: 0, bits: 16 }   # Error code
+                - { index: 0x6041, subindex: 0, bits: 16 }   # Statusword
+                - { index: 0x6061, subindex: 0, bits: 8 }    # Modes of operation display
+                - { index: 0x6064, subindex: 0, bits: 32 }   # Position actual value
+                - { index: 0x606c, subindex: 0, bits: 32 }   # Velocity actual value
+                - { index: 0x6077, subindex: 0, bits: 16 }   # Torque actual value
+                - { index: 0x60b9, subindex: 0, bits: 16 }   # Touch probe status
+                - { index: 0x60ba, subindex: 0, bits: 32 }   # Touch probe pos1 pos value
+                - { index: 0x60fd, subindex: 0, bits: 32 }   # Digital inputs
+    # SYNC0 on (0x0300), every 1 ms, 300 µs after each cycle starts so that the
+    # cycle's frame has arrived; PLEM writes 0x1C32:02 = 1000000 in PREOP.
+    dc: { assign_activate: 0x0300, sync0_cycle_ns: 1000000, sync0_shift_ns: 300000, write_cycle_time: true }
+    # Written to the drive's RAM at every start. How a moving axis stops once
+    # PLEM lets go is the drive's: these objects decide it.
+    # Stopping decelerations: 4272282972 = 3200 rad/s² at the motor (152 at the
+    # output), a bench choice without load. Set them for your load (README.md).
+    startup_sdo:
+      - { index: 0x605a, subindex: 0, size: 2, value: 2 }           # Quick stop option: slow at 6085h, then Switch on disabled
+      - { index: 0x605c, subindex: 0, size: 2, value: 1 }           # Disable operation option: slow at 6084h
+      - { index: 0x605e, subindex: 0, size: 2, value: 2 }           # Fault reaction option: slow at 6085h
+      - { index: 0x6084, subindex: 0, size: 4, value: 4272282972 }  # Profile deceleration
+      - { index: 0x6085, subindex: 0, size: 4, value: 4272282972 }  # Quick stop deceleration
+    # Values the drive must hold in its own stored parameters: read at start, a
+    # difference is one warning; nothing is written (schema §4.9).
+    stored_sdo:
+      - { index: 0x3401, subindex: 0, size: 4, value: 0 }    # Pr4.01 SI2 input: unassigned (factory: POT)
+      - { index: 0x3402, subindex: 0, size: 4, value: 0 }    # Pr4.02 SI3 input: unassigned (factory: NOT)
+      - { index: 0x3403, subindex: 0, size: 4, value: 0 }    # Pr4.03 SI4 input: unassigned
+      - { index: 0x3015, subindex: 0, size: 2, value: 2 }    # Pr0.15 absolute encoder, multi-turn kept
+      - { index: 0x3002, subindex: 0, size: 2, value: 1 }    # Pr0.02 real-time auto-tuning on
+      - { index: 0x3003, subindex: 0, size: 2, value: 11 }   # Pr0.03 stiffness
+      - { index: 0x3222, subindex: 0, size: 2, value: 139 }  # Pr2.22 command smoothing, 13.9 ms
+      - { index: 0x3647, subindex: 0, size: 2, value: 1 }    # Pr6.47 two-degree-of-freedom control
+    axes:
+      - name: [axis0, axis1]
+        channel: 1
+        mode: csp
+        mode_display_timing: pre_enable           # 0x6061 read 8 at rest on these drives (schema §4.2a)
+        factors:
+          gear_ratio: 21.0                 # the gearhead: motor turns per output turn
+          encoder_resolution: 8388608      # 23-bit; assumes the factory 1:1 electronic gear
+          # Torque in 0.1 % of the motor's rated torque, 3.18 N·m (0x6076 in mN·m ÷ 1000).
+          torque: { unit: rated_per_mille, motor_rated_torque_nm: 3.18 }
+          velocity: { velocity_factor: 1.0 }
+        flip: [false, false]
+        zero_offset_count: [0, 0]          # 0x6064 counts (motor) at the position you call 0 — measure yours
+        # At the output. Narrow the position limits for your zero, and keep more
+        # than your measured stop distance to each (README.md).
+        limits:
+          position: { min_rad: -59.5, max_rad: 59.5 }
+          # 80 % of the motor's 5000 r/min ÷ 21. A measured speed above it is a
+          # protective stop: plan moves below it, with room for overshoot.
+          velocity_rad_s: 19.9
+          acceleration_rad_s2: 95.0          # a requested stop's deceleration, under the drive's 6085h (152 at the output)

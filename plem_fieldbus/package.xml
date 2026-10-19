@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>plem_fieldbus</name>
+  <version>0.10.1</version>
+  <description>EtherCAT fieldbus library (IgH master, CiA 402 state machine, PDO checks) used by the PLEM drive packages.</description>
+  <maintainer email="william@wimcorp.co.kr">WIM Inc.</maintainer>
+  <license>Apache-2.0</license>
+  <url type="repository">https://github.com/WIM-Corporation/PLEM</url>
+  <url type="bugtracker">https://github.com/WIM-Corporation/PLEM/issues</url>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>fmt</depend>
+  <depend>plem_core</depend>
+
+  <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>ament_cmake_test</test_depend>
+  <test_depend>spdlog</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
