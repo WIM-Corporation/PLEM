@@ -1,0 +1,36 @@
+{
+  "format": "plem-drive-check/1",
+  "schema": "cia402_drive/v1",
+  "bus_name": "synthetic",
+  "config_digest": "sha256:11ae9ba4bfe777d03f2d7876116e480721b3d85f0b36e63afe5a3fcb85fbb41d",
+  "profile_digest": "sha256:43d76b4dabb0679b373e78edfb8b798e40c66fa0394e18b0ab29a66941930bce",
+  "profile_source": "built_in",
+  "implementation_revision": "<this build>",
+  "approval_claimed": "unapproved",
+  "approval_effective": "unapproved",
+  "identity_scope": null,
+  "reasons": [],
+  "warnings": [
+    "slaves[0] (ring position 5): vendor_id 0x00c0ffee is the synthetic example's, whose values fit no real drive — replace the example's values with your drive's (`ethercat slaves -v`, docs/getting-started.md)",
+    "slaves[1] (ring position 0): vendor_id 0x00c0ffee is the synthetic example's, whose values fit no real drive — replace the example's values with your drive's (`ethercat slaves -v`, docs/getting-started.md)",
+    "slaves[2] (ring position 2): vendor_id 0x00c0ffee is the synthetic example's, whose values fit no real drive — replace the example's values with your drive's (`ethercat slaves -v`, docs/getting-started.md)"
+  ],
+  "approve_blocker": null,
+  "cycle_time_ns": 1000000,
+  "command_stale_timeout_ns": 50000000,
+  "fault_reset_policy": "none",
+  "required_bench_items": ["assembly-match", "idle-non-oe", "start-rtso", "release-oe", "stale-engage", "disable-engage", "stop-quiesce"],
+  "axes": [
+    {"name": "j0", "slave": 0, "ring_position": 5, "channel": 2, "od_offset": 2048, "mode": "cst", "position_min_rad": -1.0, "position_max_rad": 1.5, "velocity_limit_rad_s": 2.0, "velocity_cap_rad_s": 2.0, "acceleration_limit_rad_s2": null, "torque_min_nm": -30.0, "torque_max_nm": 40.0, "encoder_resolution": 65536, "flip": false, "rated_torque_mnm": null},
+    {"name": "j1", "slave": 0, "ring_position": 5, "channel": 1, "od_offset": 0, "mode": "cst", "position_min_rad": -1.0, "position_max_rad": 1.5, "velocity_limit_rad_s": 2.0, "velocity_cap_rad_s": 2.0, "acceleration_limit_rad_s2": null, "torque_min_nm": -30.0, "torque_max_nm": 40.0, "encoder_resolution": 65536, "flip": false, "rated_torque_mnm": null},
+    {"name": "j2", "slave": 1, "ring_position": 0, "channel": 1, "od_offset": 0, "mode": "cst", "position_min_rad": -1.0, "position_max_rad": 1.5, "velocity_limit_rad_s": 2.0, "velocity_cap_rad_s": 2.0, "acceleration_limit_rad_s2": null, "torque_min_nm": -30.0, "torque_max_nm": 40.0, "encoder_resolution": 65536, "flip": false, "rated_torque_mnm": null},
+    {"name": "j3", "slave": 2, "ring_position": 2, "channel": 1, "od_offset": 0, "mode": "cst", "position_min_rad": -1.0, "position_max_rad": 1.5, "velocity_limit_rad_s": 2.0, "velocity_cap_rad_s": 2.0, "acceleration_limit_rad_s2": null, "torque_min_nm": -30.0, "torque_max_nm": 40.0, "encoder_resolution": 65536, "flip": false, "rated_torque_mnm": null},
+    {"name": "j4", "slave": 2, "ring_position": 2, "channel": 2, "od_offset": 2048, "mode": "cst", "position_min_rad": -1.0, "position_max_rad": 1.5, "velocity_limit_rad_s": 2.0, "velocity_cap_rad_s": 2.0, "acceleration_limit_rad_s2": null, "torque_min_nm": -30.0, "torque_max_nm": 40.0, "encoder_resolution": 65536, "flip": false, "rated_torque_mnm": null}
+  ],
+  "slaves": [
+    {"ring_position": 5, "pdo_mapping": "declared", "startup_sdo": []},
+    {"ring_position": 0, "pdo_mapping": "declared", "startup_sdo": []},
+    {"ring_position": 2, "pdo_mapping": "declared", "startup_sdo": []}
+  ],
+  "not_judged": "a scanned slave's PDO mapping is read from the drive when the bus starts and judged then, with the same rules as a declared one; the live slave identity (SII serial, 0x1009, 0x100A, scanned PDO mapping digest), fault-reset pacing against the period and the DC sync0 rules are judged at startup too; the drive accepts or refuses its startup SDOs (startup_sdo, and the 0x1C32:02 written for dc.write_cycle_time) at PREOP->SAFEOP; a SYNC0 cycle it cannot run is refused at PREOP->SAFEOP, or later as a sync error that drops the slave out of OP after it reached OP (documented drive behaviour, not a guarantee for every drive); both show in the kernel log"
+}

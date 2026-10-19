@@ -1,0 +1,12 @@
+bus synthetic: 5 axes on 3 drives
+  j0  cst  ring 5 channel 2
+  j1  cst  ring 5 channel 1
+  j2  cst  ring 0 channel 1
+  j3  cst  ring 2 channel 1
+  j4  cst  ring 2 channel 2
+approval: not approved
+warning: slaves[0] (ring position 5): vendor_id 0x00c0ffee is the synthetic example's, whose values fit no real drive — replace the example's values with your drive's (`ethercat slaves -v`, docs/getting-started.md)
+warning: slaves[1] (ring position 0): vendor_id 0x00c0ffee is the synthetic example's, whose values fit no real drive — replace the example's values with your drive's (`ethercat slaves -v`, docs/getting-started.md)
+warning: slaves[2] (ring position 2): vendor_id 0x00c0ffee is the synthetic example's, whose values fit no real drive — replace the example's values with your drive's (`ethercat slaves -v`, docs/getting-started.md)
+next: replace the example's values with your drive's (`ethercat slaves -v`, docs/getting-started.md), then check the file again
+details: plem drive check --json <file>

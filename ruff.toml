@@ -1,0 +1,6 @@
+# Python lint rules for this repository: `ruff check` finds this file from any Python file below it.
+#
+# The rules are selected explicitly because ruff's built-in default set changes between ruff versions;
+# naming them keeps the result the same whichever ruff you have. Widening the set is its own change.
+[lint]
+select = ["E4", "E7", "E9", "F"]

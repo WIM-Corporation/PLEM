@@ -1,0 +1,188 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<root>
+ <tabbed_widget parent="main_window" name="Main Window">
+  <Tab containers="1" tab_name="position">
+   <Container>
+    <DockSplitter orientation="-" sizes="1" count="1">
+     <DockSplitter orientation="-" sizes="0.500000;0.500000" count="2">
+       <DockArea name="...">
+        <plot mode="TimeSeries" line_width="1.0" flip_x="false" flip_y="false">
+         <range left="0.000000" bottom="-1.000000" top="1.000000" right="10.000000"/>
+         <limitY/>
+         <curve color="#1f77b4" name="/a6b_pair/rt_raw/samples/actual_position[0]"/>
+         <curve color="#d62728" name="/a6b_pair/rt_raw/samples/applied_command[0]"/>
+         <curve color="#1ac938" name="/a6b_pair/rt_raw/samples/command_position[0]"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot mode="TimeSeries" line_width="1.0" flip_x="false" flip_y="false">
+         <range left="0.000000" bottom="-1.000000" top="1.000000" right="10.000000"/>
+         <limitY/>
+         <curve color="#1f77b4" name="/a6b_pair/rt_raw/samples/actual_position[1]"/>
+         <curve color="#d62728" name="/a6b_pair/rt_raw/samples/applied_command[1]"/>
+         <curve color="#1ac938" name="/a6b_pair/rt_raw/samples/command_position[1]"/>
+        </plot>
+       </DockArea>
+     </DockSplitter>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab containers="1" tab_name="sync">
+   <Container>
+    <DockSplitter orientation="-" sizes="1" count="1">
+     <DockSplitter orientation="-" sizes="0.333333;0.333333;0.333334" count="3">
+       <DockArea name="...">
+        <plot mode="TimeSeries" line_width="1.0" flip_x="false" flip_y="false">
+         <range left="0.000000" bottom="-1.000000" top="1.000000" right="10.000000"/>
+         <limitY/>
+         <curve color="#1f77b4" name="position_mismatch"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot mode="TimeSeries" line_width="1.0" flip_x="false" flip_y="false">
+         <range left="0.000000" bottom="-1.000000" top="1.000000" right="10.000000"/>
+         <limitY/>
+         <curve color="#1f77b4" name="velocity_sum"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot mode="TimeSeries" line_width="1.0" flip_x="false" flip_y="false">
+         <range left="0.000000" bottom="-1.000000" top="1.000000" right="10.000000"/>
+         <limitY/>
+         <curve color="#1f77b4" name="opposing_torque"/>
+        </plot>
+       </DockArea>
+     </DockSplitter>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab containers="1" tab_name="velocity_torque">
+   <Container>
+    <DockSplitter orientation="-" sizes="1" count="1">
+     <DockSplitter orientation="-" sizes="0.500000;0.500000" count="2">
+       <DockArea name="...">
+        <plot mode="TimeSeries" line_width="1.0" flip_x="false" flip_y="false">
+         <range left="0.000000" bottom="-1.000000" top="1.000000" right="10.000000"/>
+         <limitY/>
+         <curve color="#1f77b4" name="/a6b_pair/rt_raw/samples/actual_velocity[0]"/>
+         <curve color="#d62728" name="/a6b_pair/rt_raw/samples/actual_velocity[1]"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot mode="TimeSeries" line_width="1.0" flip_x="false" flip_y="false">
+         <range left="0.000000" bottom="-1.000000" top="1.000000" right="10.000000"/>
+         <limitY/>
+         <curve color="#1f77b4" name="/a6b_pair/rt_raw/samples/actual_torque[0]"/>
+         <curve color="#d62728" name="/a6b_pair/rt_raw/samples/actual_torque[1]"/>
+        </plot>
+       </DockArea>
+     </DockSplitter>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab containers="1" tab_name="timing">
+   <Container>
+    <DockSplitter orientation="-" sizes="1" count="1">
+     <DockSplitter orientation="-" sizes="0.500000;0.500000" count="2">
+       <DockArea name="...">
+        <plot mode="TimeSeries" line_width="1.0" flip_x="false" flip_y="false">
+         <range left="0.000000" bottom="-1.000000" top="1.000000" right="10.000000"/>
+         <limitY/>
+         <curve color="#1f77b4" name="/a6b_pair/rt_raw/samples/loop_exec_us[0]"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot mode="TimeSeries" line_width="1.0" flip_x="false" flip_y="false">
+         <range left="0.000000" bottom="-1.000000" top="1.000000" right="10.000000"/>
+         <limitY/>
+         <curve color="#1f77b4" name="/a6b_pair/rt_raw/samples/loop_jitter_us[0]"/>
+        </plot>
+       </DockArea>
+     </DockSplitter>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab containers="1" tab_name="bus">
+   <Container>
+    <DockSplitter orientation="-" sizes="1" count="1">
+     <DockSplitter orientation="-" sizes="0.500000;0.500000" count="2">
+       <DockArea name="...">
+        <plot mode="TimeSeries" line_width="1.0" flip_x="false" flip_y="false">
+         <range left="0.000000" bottom="-1.000000" top="1.000000" right="10.000000"/>
+         <limitY/>
+         <curve color="#1f77b4" name="/a6b_pair/rt_raw/samples/wkc_mismatch[0]"/>
+         <curve color="#d62728" name="/a6b_pair/rt_raw/samples/deadline_miss[0]"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot mode="TimeSeries" line_width="1.0" flip_x="false" flip_y="false">
+         <range left="0.000000" bottom="-1.000000" top="1.000000" right="10.000000"/>
+         <limitY/>
+         <curve color="#1f77b4" name="/a6b_pair/rt_raw/samples/dc_sync_monitor_ns[0]"/>
+        </plot>
+       </DockArea>
+     </DockSplitter>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <currentTabIndex index="0"/>
+ </tabbed_widget>
+ <use_relative_time_offset enabled="1"/>
+ <!-- - - - - - - - - - - - - - - -->
+ <!-- - - - - - - - - - - - - - - -->
+ <Plugins>
+  <plugin ID="DataLoad ROS2 bags">
+   <use_header_stamp value="true"/>
+   <discard_large_arrays value="true"/>
+   <max_array_size value="100"/>
+   <boolean_strings_to_number value="true"/>
+   <remove_suffix_from_strings value="true"/>
+   <selected_topics value="/a6b_pair/rt_raw/samples"/>
+  </plugin>
+  <plugin ID="ROS2 Topic Subscriber">
+   <use_header_stamp value="true"/>
+   <discard_large_arrays value="true"/>
+   <max_array_size value="100"/>
+   <boolean_strings_to_number value="true"/>
+   <remove_suffix_from_strings value="true"/>
+   <selected_topics value="/a6b_pair/rt_raw/samples"/>
+  </plugin>
+ </Plugins>
+ <!-- - - - - - - - - - - - - - - -->
+ <previouslyLoaded_Datafiles/>
+ <previouslyLoaded_Streamer name="ROS2 Topic Subscriber"/>
+ <!-- - - - - - - - - - - - - - - -->
+ <customMathEquations>
+  <!-- A mirrored pair (axis1 = S - axis0): p0 + p1 stays at its first value.
+       Its change from the first sample is the position mismatch in rad. -->
+  <snippet name="position_mismatch">
+   <global>first = nil</global>
+   <function>if first == nil then first = value + v1 end
+return value + v1 - first</function>
+   <linked_source>/a6b_pair/rt_raw/samples/actual_position[0]</linked_source>
+   <additional_sources>
+    <v1>/a6b_pair/rt_raw/samples/actual_position[1]</v1>
+   </additional_sources>
+  </snippet>
+  <!-- Mirrored speeds cancel: v0 + v1 is 0 rad/s when the pair is in sync. -->
+  <snippet name="velocity_sum">
+   <global></global>
+   <function>return value + v1</function>
+   <linked_source>/a6b_pair/rt_raw/samples/actual_velocity[0]</linked_source>
+   <additional_sources>
+    <v1>/a6b_pair/rt_raw/samples/actual_velocity[1]</v1>
+   </additional_sources>
+  </snippet>
+  <!-- The torque both drives push against each other through the coupling, in N·m. -->
+  <snippet name="opposing_torque">
+   <global></global>
+   <function>return (value + v1) / 2</function>
+   <linked_source>/a6b_pair/rt_raw/samples/actual_torque[0]</linked_source>
+   <additional_sources>
+    <v1>/a6b_pair/rt_raw/samples/actual_torque[1]</v1>
+   </additional_sources>
+  </snippet>
+ </customMathEquations>
+ <snippets/>
+ <!-- - - - - - - - - - - - - - - -->
+</root>

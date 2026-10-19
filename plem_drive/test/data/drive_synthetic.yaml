@@ -1,0 +1,227 @@
+# SPDX-FileCopyrightText: 2025-2026 WIM Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# A SYNTHETIC drive model file (schema: cia402-drive-model.md).
+# Every value is made up and belongs to no vendor: this file is the loader's
+# golden (test_drive_model_file.cpp) and the schema's worked example — not a
+# drive's declaration, and no evidence that any drive behaves like this.
+#
+# v1 premises a file does not state (schema §4.4): a power-coupled brake holds
+# each axis after disable; losing communication is a protective stop, and the
+# output sync manager's watchdog covers a dead master; brakes are independent
+# per axis — a drive with a shared brake is not supported, and the loader
+# cannot refuse one.
+#
+# Document order is joint order: the axes below are joints 0..4 as written.
+# The DC reference clock is the lowest ring position (slave 0), not the first
+# slave listed (schema §5).
+# The file's own revision lives in a comment, like the one on `model`.
+schema: cia402_drive/v1
+model: { name: synthetic_3slave_cst }          # rev 2026-09-13.1
+bus: { name: synthetic, cycle_time_ns: 1000000, sync_mode: drive_default }  # dc_sync0: every slave also declares dc: {...}
+fault_reset: { policy: none, pulse_ms: 0 }                   # bounded_auto_reset also takes pacing: {...}
+# No cia402_profile: these drives accept the core's built-in transition table.
+slaves:
+  - ring_position: 5                            # ring positions need not follow the file order
+    vendor_id: 0x00c0ffee
+    product_code: 0x00001001
+    pdo_mapping:                                # absolute object addresses — channel 2 at +0x800
+      sync_managers:
+        - { sm: 0, direction: output, watchdog: false, pdos: [] }
+        - { sm: 1, direction: input, watchdog: false, pdos: [] }
+        - sm: 2
+          direction: output
+          watchdog: true
+          pdos:
+            - index: 0x1600
+              entries:
+                - { index: 0x6040, subindex: 0, bits: 16 }
+                - { index: 0x6060, subindex: 0, bits: 8 }
+                - { index: 0x0000, subindex: 0, bits: 8 }   # gap: padding that occupies image space
+                - { index: 0x607a, subindex: 0, bits: 32 }
+                - { index: 0x6071, subindex: 0, bits: 16 }
+            - index: 0x1601
+              entries:
+                - { index: 0x6840, subindex: 0, bits: 16 }
+                - { index: 0x6860, subindex: 0, bits: 8 }
+                - { index: 0x0000, subindex: 0, bits: 8 }
+                - { index: 0x687a, subindex: 0, bits: 32 }
+                - { index: 0x6871, subindex: 0, bits: 16 }
+        - sm: 3
+          direction: input
+          watchdog: false
+          pdos:
+            - index: 0x1a00
+              entries:
+                - { index: 0x6041, subindex: 0, bits: 16 }
+                - { index: 0x6061, subindex: 0, bits: 8 }
+                - { index: 0x0000, subindex: 0, bits: 8 }
+                - { index: 0x6064, subindex: 0, bits: 32 }
+                - { index: 0x606c, subindex: 0, bits: 32 }
+                - { index: 0x6077, subindex: 0, bits: 16 }
+                - { index: 0x603f, subindex: 0, bits: 16 }
+            - index: 0x1a01
+              entries:
+                - { index: 0x6841, subindex: 0, bits: 16 }
+                - { index: 0x6861, subindex: 0, bits: 8 }
+                - { index: 0x0000, subindex: 0, bits: 8 }
+                - { index: 0x6864, subindex: 0, bits: 32 }
+                - { index: 0x686c, subindex: 0, bits: 32 }
+                - { index: 0x6877, subindex: 0, bits: 16 }
+                - { index: 0x683f, subindex: 0, bits: 16 }
+    startup_sdo: []
+    axes:                                       # joints 0 and 1 — channels in reverse order
+      - name: j0
+        channel: 2                              # the drive's second CiA 402 axis (od_offset 0x800)
+        mode: cst
+        mode_display_timing: pre_enable
+        factors:
+          gear_ratio: 100.0
+          encoder_resolution: 65536
+          torque: { unit: scaled_current, counts_per_amp: 50.0, torque_constant: 0.12 }
+          position: { unit: rotary_motor_encoder }
+          velocity: { unit: rotary_motor_encoder, velocity_factor: 1.0 }
+        flip: false
+        zero_offset_count: 1234
+        error_code_pdo: { index: 0x603f, subindex: 0, bits: 16 }   # channel 1's address — the loader adds nothing
+        limits: { position: { min_rad: -1.0, max_rad: 1.5 }, velocity_rad_s: 2.0, torque_nm: { min: -30.0, max: 40.0 } }
+      - name: j1
+        channel: 1
+        mode: cst
+        mode_display_timing: pre_enable
+        factors:
+          gear_ratio: 100.0
+          encoder_resolution: 65536
+          torque: { unit: scaled_current, counts_per_amp: 50.0, torque_constant: 0.12 }
+          position: { unit: rotary_motor_encoder }
+          velocity: { unit: rotary_motor_encoder, velocity_factor: 1.0 }
+        flip: false
+        zero_offset_count: -77
+        error_code_pdo: { index: 0x603f, subindex: 0, bits: 16 }
+        limits: { position: { min_rad: -1.0, max_rad: 1.5 }, velocity_rad_s: 2.0, torque_nm: { min: -30.0, max: 40.0 } }
+  - ring_position: 0
+    vendor_id: 0x00c0ffee
+    product_code: 0x00001001
+    pdo_mapping:
+      sync_managers:
+        - { sm: 0, direction: output, watchdog: false, pdos: [] }
+        - { sm: 1, direction: input, watchdog: false, pdos: [] }
+        - sm: 2
+          direction: output
+          watchdog: true
+          pdos:
+            - index: 0x1600
+              entries:
+                - { index: 0x6040, subindex: 0, bits: 16 }
+                - { index: 0x607a, subindex: 0, bits: 32 }
+                - { index: 0x60ff, subindex: 0, bits: 32 }
+                - { index: 0x6071, subindex: 0, bits: 16 }
+                - { index: 0x6060, subindex: 0, bits: 8 }
+        - sm: 3
+          direction: input
+          watchdog: false
+          pdos:
+            - index: 0x1a00
+              entries:
+                - { index: 0x6041, subindex: 0, bits: 16 }
+                - { index: 0x6064, subindex: 0, bits: 32 }
+                - { index: 0x606c, subindex: 0, bits: 32 }
+                - { index: 0x6077, subindex: 0, bits: 16 }
+                - { index: 0x6061, subindex: 0, bits: 8 }
+    startup_sdo: []
+    axes:                                       # joint 2
+      - name: j2
+        channel: 1
+        mode: cst
+        mode_display_timing: pre_enable
+        factors:
+          gear_ratio: 100.0
+          encoder_resolution: 65536
+          torque: { unit: scaled_current, counts_per_amp: 50.0, torque_constant: 0.12 }
+          position: { unit: rotary_motor_encoder }
+          velocity: { unit: rotary_motor_encoder, velocity_factor: 1.0 }
+        flip: false
+        zero_offset_count: 305
+        error_code_pdo: null                    # this layout maps no ErrorCode
+        limits: { position: { min_rad: -1.0, max_rad: 1.5 }, velocity_rad_s: 2.0, torque_nm: { min: -30.0, max: 40.0 } }
+  - ring_position: 2
+    vendor_id: 0x00c0ffee
+    product_code: 0x00001001
+    pdo_mapping:
+      sync_managers:
+        - { sm: 0, direction: output, watchdog: false, pdos: [] }
+        - { sm: 1, direction: input, watchdog: false, pdos: [] }
+        - sm: 2
+          direction: output
+          watchdog: true
+          pdos:
+            - index: 0x1600
+              entries:
+                - { index: 0x6040, subindex: 0, bits: 16 }
+                - { index: 0x6060, subindex: 0, bits: 8 }
+                - { index: 0x0000, subindex: 0, bits: 8 }
+                - { index: 0x607a, subindex: 0, bits: 32 }
+                - { index: 0x6071, subindex: 0, bits: 16 }
+            - index: 0x1601
+              entries:
+                - { index: 0x6840, subindex: 0, bits: 16 }
+                - { index: 0x6860, subindex: 0, bits: 8 }
+                - { index: 0x0000, subindex: 0, bits: 8 }
+                - { index: 0x687a, subindex: 0, bits: 32 }
+                - { index: 0x6871, subindex: 0, bits: 16 }
+        - sm: 3
+          direction: input
+          watchdog: false
+          pdos:
+            - index: 0x1a00
+              entries:
+                - { index: 0x6041, subindex: 0, bits: 16 }
+                - { index: 0x6061, subindex: 0, bits: 8 }
+                - { index: 0x0000, subindex: 0, bits: 8 }
+                - { index: 0x6064, subindex: 0, bits: 32 }
+                - { index: 0x606c, subindex: 0, bits: 32 }
+                - { index: 0x6077, subindex: 0, bits: 16 }
+                - { index: 0x603f, subindex: 0, bits: 16 }
+            - index: 0x1a01
+              entries:
+                - { index: 0x6841, subindex: 0, bits: 16 }
+                - { index: 0x6861, subindex: 0, bits: 8 }
+                - { index: 0x0000, subindex: 0, bits: 8 }
+                - { index: 0x6864, subindex: 0, bits: 32 }
+                - { index: 0x686c, subindex: 0, bits: 32 }
+                - { index: 0x6877, subindex: 0, bits: 16 }
+                - { index: 0x683f, subindex: 0, bits: 16 }
+    startup_sdo: []
+    axes:                                       # joints 3 and 4
+      - name: j3
+        channel: 1
+        mode: cst
+        mode_display_timing: pre_enable
+        factors:
+          gear_ratio: 100.0
+          encoder_resolution: 65536
+          torque: { unit: scaled_current, counts_per_amp: 50.0, torque_constant: 0.12 }
+          position: { unit: rotary_motor_encoder }
+          velocity: { unit: rotary_motor_encoder, velocity_factor: 1.0 }
+        flip: false
+        zero_offset_count: -406
+        error_code_pdo: { index: 0x603f, subindex: 0, bits: 16 }
+        limits: { position: { min_rad: -1.0, max_rad: 1.5 }, velocity_rad_s: 2.0, torque_nm: { min: -30.0, max: 40.0 } }
+      - name: j4
+        channel: 2
+        mode: cst
+        mode_display_timing: pre_enable
+        factors:
+          gear_ratio: 100.0
+          encoder_resolution: 65536
+          torque: { unit: scaled_current, counts_per_amp: 50.0, torque_constant: 0.12 }
+          position: { unit: rotary_motor_encoder }
+          velocity: { unit: rotary_motor_encoder, velocity_factor: 1.0 }
+        flip: false
+        zero_offset_count: 507
+        error_code_pdo: { index: 0x603f, subindex: 0, bits: 16 }
+        limits: { position: { min_rad: -1.0, max_rad: 1.5 }, velocity_rad_s: 2.0, torque_nm: { min: -30.0, max: 40.0 } }
+# Not yet approved: the bench's approval step writes the approval record here.
+approval:
+  status: unapproved
+  record: null

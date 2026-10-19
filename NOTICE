@@ -1,0 +1,9 @@
+PLEM drive
+Copyright 2025-2026 WIM Inc.
+
+This product includes SPSCQueue by Erik Rigtorp, used under the MIT License.
+Its copyright notice and license text are kept in the header file
+plem_core/include/plem/core/third_party/rigtorp/SPSCQueue.h in the source
+distribution. That file is include/rigtorp/SPSCQueue.h of
+https://github.com/rigtorp/SPSCQueue at commit
+1053918dbd251fbff69b24ef27fa5d51c29ec2af, unmodified.

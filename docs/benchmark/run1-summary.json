@@ -1,0 +1,58 @@
+{
+  "period_us": 1000.0,
+  "seconds": 306.9,
+  "cycles": 306920,
+  "cycles_not_recorded": 0,
+  "overruns": 0,
+  "wkc_errors": 0,
+  "wake_latency_us": {
+    "mean": 0.68,
+    "p99": 1.66,
+    "p99_9": 2.5,
+    "max": 6.07
+  },
+  "cycle_work_us": {
+    "mean": 12.77,
+    "p99": 15.33,
+    "p99_9": 16.64,
+    "max": 25.34
+  },
+  "dc_deviation_ns": {
+    "mean": 216.79,
+    "p99": 857.0,
+    "p99_9": 1511.08,
+    "max": 3159.0
+  },
+  "phases": {
+    "holding": {
+      "seconds": 63.5,
+      "wake_latency_us": {
+        "mean": 0.74,
+        "p99": 1.81,
+        "p99_9": 2.68,
+        "max": 4.99
+      },
+      "cycle_work_us": {
+        "mean": 12.42,
+        "p99": 14.82,
+        "p99_9": 16.95,
+        "max": 25.34
+      }
+    },
+    "moving": {
+      "seconds": 241.0,
+      "wake_latency_us": {
+        "mean": 0.66,
+        "p99": 1.6,
+        "p99_9": 2.44,
+        "max": 6.07
+      },
+      "cycle_work_us": {
+        "mean": 12.86,
+        "p99": 15.39,
+        "p99_9": 16.61,
+        "max": 23.52
+      }
+    }
+  }
+}

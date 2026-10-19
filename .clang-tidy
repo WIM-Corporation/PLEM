@@ -1,0 +1,22 @@
+# clang-tidy for the C++ sources: bug-class checks only, run on the lines a
+# change touches (see CONTRIBUTING.md). Style is .clang-format's job.
+# Left out: clang-analyzer-* (minutes per large file, found nothing here) and
+# bugprone-unchecked-optional-access (false positives on checked array slots).
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -bugprone-unchecked-optional-access,
+  performance-*,
+  -performance-no-int-to-ptr,
+  misc-definitions-in-headers
+
+WarningsAsErrors: >
+  bugprone-use-after-move,
+  bugprone-dangling-handle,
+  bugprone-forwarding-reference-overload,
+  bugprone-move-forwarding-reference,
+  performance-move-const-arg
+
+HeaderFilterRegex: '/(plem_[a-z_]+|src)/.*\.(h|hpp)$'

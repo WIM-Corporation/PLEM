@@ -1,0 +1,16 @@
+# SetControlCommand.srv - control command to an RT host (brakes, protective stop, recovery)
+#
+# Each host maps every request flag onto its own API; the drive layer's mapping is noted per field.
+# protective_stop with release_brake or free_drive: the stop wins. Only protective_stop runs, the other flags
+# (reset_error included) are dropped, and the response is success=false naming what ran and what was dropped.
+bool release_brake    # release the brakes and admit motion
+                      # (drive layer: every axis walks to CiA 402 Operation enabled)
+bool protective_stop  # stop and engage the brakes (drive layer: a bus without a cst axis ramps every
+                      # csp/csv axis to rest at limits.acceleration_rad_s2 first, CiA 402 Quick stop only
+                      # when that is not confirmed in time; a bus with a cst axis disables at once)
+bool reset_error      # recovery request (drive layer: CiA 402 Fault reset (Controlword bit 7) and
+                      # protective-stop clear); confirms nothing
+bool free_drive       # hand-guiding (the drive layer refuses it)
+---
+bool success
+string message

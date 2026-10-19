@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>plem_drive</name>
+  <version>0.10.1</version>
+  <description>CiA 402 servo drives on an EtherCAT bus from one drive model file: the plem-drive command (check, run), the Python client plem.drive, the ros2_control hardware plugin and stream controller, rt_raw_relay, and the drive library under them (the drive model file loader and DriveHost, without ROS).</description>
+  <maintainer email="william@wimcorp.co.kr">WIM Inc.</maintainer>
+  <license>Apache-2.0</license>
+  <url type="repository">https://github.com/WIM-Corporation/PLEM</url>
+  <url type="bugtracker">https://github.com/WIM-Corporation/PLEM/issues</url>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <!-- The drive library: Result<void> and the monitoring queues (core), the EtherCAT bus (fieldbus). -->
+  <depend>plem_core</depend>
+  <depend>plem_fieldbus</depend>
+  <!-- libyaml (event API) for the drive model file reader. -->
+  <depend>libyaml_vendor</depend>
+  <depend>fmt</depend>
+  <build_depend>nlohmann-json-dev</build_depend>
+
+  <!-- The ROS layer: the bus as ros2_control hardware and its stream controller. -->
+  <depend>rclcpp</depend>
+  <depend>rclcpp_lifecycle</depend>
+  <depend>plem_drive_msgs</depend>
+  <depend>plem_rt_msgs</depend>
+  <!-- std_msgs: the stream controller's commands. -->
+  <depend>std_msgs</depend>
+  <depend>hardware_interface</depend>
+  <depend>controller_interface</depend>
+  <depend>pluginlib</depend>
+  <depend>realtime_tools</depend>
+
+  <!-- The bench (plem/drive/cli/bench.py, offered by `plem drive run`): an rclpy runner that reads the bus's
+       topics and `plem drive check`, and hands its evidence to the approve step; its rest stream is
+       `ros2 topic pub`. -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>ros2topic</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <!-- sensor_msgs: the joint states plem.drive and the bench read (Python only). -->
+  <exec_depend>sensor_msgs</exec_depend>
+
+  <!-- plem drive run starts these: the controller manager, its spawner and lanes, the robot description. -->
+  <exec_depend>controller_manager</exec_depend>
+  <exec_depend>joint_trajectory_controller</exec_depend>
+  <exec_depend>joint_state_broadcaster</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <!-- plem.drive (plem/drive): the trajectory it plans and the interfaces it calls. -->
+  <exec_depend>trajectory_msgs</exec_depend>
+  <exec_depend>builtin_interfaces</exec_depend>
+  <exec_depend>control_msgs</exec_depend>
+  <exec_depend>controller_manager_msgs</exec_depend>
+  <exec_depend>action_msgs</exec_depend>
+
+  <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>ament_cmake_test</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>python3-pytest</test_depend>
+  <!-- test/ruckig_reference.cpp: Ruckig as the reference for plem.drive's profiles. -->
+  <test_depend>ruckig</test_depend>
+  <!-- Used by the tests only: lifecycle states and log capture (gtest), the message IDL parser (pytest). -->
+  <test_depend>lifecycle_msgs</test_depend>
+  <test_depend>rcutils</test_depend>
+  <test_depend>rosidl_parser</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
