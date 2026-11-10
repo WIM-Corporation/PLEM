@@ -97,8 +97,8 @@ core::Result<void> bus_startup_refusal(const models::DriveModelSpec<N>& spec) {
 /// name, safety limits (null = no end stop), mode, encoder counts per motor
 /// turn, flip, and a rated_per_mille axis's rated torque in 0x6076's mNm
 /// (six significant digits, never rounded to whole mNm: a sub-mNm value must
-/// not print as 0); ring position, mapping provenance and the [index,
-/// subindex, value] writes of startup_sdo per slave, so it
+/// not print as 0); ring position, vendor and product code, mapping
+/// provenance and the [index, subindex, value] writes of startup_sdo per slave, so it
 /// never reads the YAML itself.
 template <size_t N>
 void put_layout(const models::DriveModelSpec<N>& spec, nlohmann::ordered_json& out) {
@@ -144,6 +144,8 @@ void put_layout(const models::DriveModelSpec<N>& spec, nlohmann::ordered_json& o
     for (size_t s = 0; s < spec.slave_count; ++s) {
         nlohmann::ordered_json& slave = slaves.emplace_back();
         slave["ring_position"] = spec.slaves[s].ring_position;
+        slave["vendor_id"] = spec.slaves[s].vendor_id;
+        slave["product_code"] = spec.slaves[s].product_code;
         slave["pdo_mapping"] = spec.slaves[s].pdo_mapping.sync_count == 0 ? "scanned" : "declared";
         // What the file writes at PREOP->SAFEOP (and the drive keeps in RAM):
         // a bench reading those objects before the node sees the drive's
@@ -310,6 +312,7 @@ int tool_check(const std::vector<std::string>& args, std::ostream& out, std::ost
     std::visit(
         [&](const auto& spec) {
             json["cycle_time_ns"] = uint64_t{spec.cycle_time_us} * 1000;
+            json["sync_mode"] = spec.dc_enable ? "dc_sync0" : "drive_default";
             json["command_stale_timeout_ns"] = kCommandStaleTimeoutNs;
             json["fault_reset_policy"] =
                 spec.fault_reset == fieldbus::ethercat::FaultResetPolicy::NONE ? "none" : "bounded_auto_reset";

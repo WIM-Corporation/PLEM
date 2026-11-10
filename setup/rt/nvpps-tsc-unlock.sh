@@ -11,7 +11,9 @@
 # switch.
 #
 # The property is written directly into /boot/dtb/kernel_*.dtb, and each label without FDT (except
-# primary) gets an FDT line pointing at that file (so the label uses the same DTB even if it boots another kernel image).
+# primary) gets an FDT line pointing at that file. On a USB (Jetson ISO) install, which has neither, the file is
+# first created from the /boot DTB that matches the booted slot's kernel-dtb partition (the DTB the firmware
+# boots there), so the label keeps that DTB, now with the property.
 # Labels that a third-party camera driver package creates also use this file as FDT, so the setting
 # survives that package's install and upgrade. If the property is lost (the L4T dtbs package restores the original, or an extlinux
 # without FDT is restored), the lock simply turns back on and the system still boots. Never add FDT to primary:
@@ -50,7 +52,42 @@ for t in fdtget fdtput fdtoverlay dtc; do
     command -v "$t" &>/dev/null || finish 2 "failed: ${t} not found (device-tree-compiler)"
 done
 
+# Temp files and a seeded DTB that is not committed yet are removed on any exit, so a failure before the
+# replacement leaves /boot as it was (exit 2).
+dtmp="" etmp="" seeded="" seeded_dir=false
+cleanup() {
+    rm -f "$dtmp" "$etmp"
+    [[ -n "$seeded" ]] && rm -f "$seeded" && $seeded_dir && rmdir /boot/dtb 2>/dev/null
+    return 0
+}
+$CHECK || trap cleanup EXIT   # --check runs without the lock, so it must not delete the writer's temp files
+
 mapfile -t dtbs < <(compgen -G '/boot/dtb/kernel_*.dtb')
+# A USB (Jetson ISO) install has no /boot/dtb/ and no FDT line: the firmware boots the DTB in the booted slot's
+# kernel-dtb partition. Start /boot/dtb/kernel_<board>.dtb, the name a flash uses, from the /boot/<board>.dtb
+# (installed by the kernel dtbs package) whose bytes that partition starts with. The partition is padded, so
+# only the file's length is compared. The compatible check below then runs on it.
+if (( ${#dtbs[@]} == 0 )); then
+    case "$(nvbootctrl get-current-slot 2>/dev/null)" in
+        0) part=/dev/disk/by-partlabel/A_kernel-dtb ;;
+        1) part=/dev/disk/by-partlabel/B_kernel-dtb ;;
+        *) finish 2 "failed: no /boot/dtb/kernel_*.dtb, and nvbootctrl get-current-slot did not report the boot slot" ;;
+    esac
+    board=""
+    for f in /boot/*.dtb; do
+        [[ -f "$f" ]] && cmp -s -n "$(stat -c %s "$f")" "$f" "$part" && { board=$(basename "$f" .dtb); break; }
+    done
+    [[ -n "$board" ]] \
+        || finish 2 "failed: no /boot/dtb/kernel_*.dtb, and no /boot/*.dtb matches ${part}, the DTB the firmware boots"
+    if $CHECK; then
+        dtbs=("/boot/${board}.dtb")   # judged as it would be seeded; nothing is written
+    else
+        [[ -d /boot/dtb ]] || seeded_dir=true
+        mkdir -p /boot/dtb && cp -p "/boot/${board}.dtb" "/boot/dtb/kernel_${board}.dtb" \
+            || finish 2 "failed: could not create /boot/dtb/kernel_${board}.dtb"
+        seeded="/boot/dtb/kernel_${board}.dtb"; dtbs=("$seeded")
+    fi
+fi
 (( ${#dtbs[@]} == 1 )) || finish 2 "failed: expected exactly one /boot/dtb/kernel_*.dtb (found ${#dtbs[@]})"
 DTB=${dtbs[0]}
 live_compat=$(tr '\0' ' ' < /proc/device-tree/compatible | sed 's/ *$//')
@@ -75,8 +112,6 @@ label_field() {  # label_field <conf> <label> <key>: the value of key in that la
 
 # 1. Build everything to be written as temp files, and replace only after they are verified.
 changed="" dtmp=/boot/dtb/.plem-nvpps.tmp dbak="/boot/dtb/.plem-bak-${DTB##*/}" etmp="${EXT}.plem-tmp"   # leading dot: outside the L4T and driver package globs
-cleanup() { rm -f "$dtmp" "$etmp"; }
-$CHECK || trap cleanup EXIT   # --check runs without the lock, so it must not delete the writer's temp files
 need_dtb=false; [[ $(has_prop "$DTB" && echo 1 || echo 0) != "$want" ]] && need_dtb=true
 need_ext=false; (( want )) && [[ -n "$(fdt_missing "$EXT")" ]] && need_ext=true
 
@@ -106,6 +141,8 @@ fi
 # 2. Replace. A rename within the same directory, so an interruption leaves either the old file or the new one.
 if ! $CHECK && $need_dtb; then
     sync "$dtmp" && mv "$dtmp" "$DTB" || finish 3 "failed: replacing ${DTB} failed"
+    [[ -n "$seeded" ]] && changed+="${DTB} created from /boot/${board}.dtb, "
+    seeded=""   # committed: kept on exit
     changed+="DTB (previous content in ${dbak}) "
 fi
 if ! $CHECK && $need_ext; then

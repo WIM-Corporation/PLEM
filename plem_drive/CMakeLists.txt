@@ -420,6 +420,8 @@ int main() {
   ament_add_pytest_test(${PROJECT_NAME}_test_bus test/python/test_bus.py TIMEOUT 120)
   # The monitor's ROS-free fold (sequence loss, DC sentinel, percentile bins).
   ament_add_pytest_test(${PROJECT_NAME}_test_monitor test/python/test_monitor.py)
+  ament_add_pytest_test(${PROJECT_NAME}_test_fleet test/python/test_fleet.py)
+  ament_add_pytest_test(${PROJECT_NAME}_test_fleet_session test/python/test_fleet_session.py)
   # The A6B example passes the loader, the value gate and the bus's startup
   # check of drive_model_tool (exit 0 = the approval it claims holds). Its
   # values stay unproven here.

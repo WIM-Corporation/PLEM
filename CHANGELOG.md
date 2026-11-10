@@ -3,7 +3,7 @@
 Releases of this repository. Each one is a tag `vX.Y.Z`. Documentation-only updates between releases are not
 listed.
 
-## [0.11.0]
+## [0.11.0] - 2026-11-11
 
 First public release, for Jetson AGX Orin with JetPack 7.2.1 and ROS 2 Jazzy.
 
@@ -15,3 +15,4 @@ First public release, for Jetson AGX Orin with JetPack 7.2.1 and ROS 2 Jazzy.
   and when a slave still has `example_drive.yaml`'s placeholder `vendor_id`.
 - The setup wizard for the RT kernel, CPU isolation and the IgH EtherCAT master ([`setup/rt/`](setup/rt/)).
 - Build from source: [`docs/install.md`](docs/install.md).
+- Optional device reporting, asked once by the setup wizard ([`docs/telemetry.md`](docs/telemetry.md)).

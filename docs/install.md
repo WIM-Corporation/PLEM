@@ -90,6 +90,9 @@ you cancel after that point, it stays stopped; `sudo systemctl start ethercat` b
 | **3. Install EtherCAT master** | Builds IgH 1.6.13 into `/opt/etherlab`, selects the port (asking when there are several), writes `/etc/ethercat.conf`, takes the port away from NetworkManager, and enables and starts `ethercat.service`. Locked until menu 1 is complete and the RT kernel is booted |
 | **4. RT jitter load test** | `cyclictest` on the isolated CPU under load, 1 to 5 kHz. Optional; run it before the application (it refuses while a control loop runs on that CPU) |
 
+Before the menu, the wizard asks once whether to share device data with WIM. Nothing is sent unless you answer Yes
+([`docs/telemetry.md`](telemetry.md)).
+
 The build needs IgH under `/opt/etherlab` (menu 3); it is not a rosdep key.
 
 The bus loop runs as `SCHED_FIFO` priority 98 on the last isolated CPU. `plem drive run --rt-cpu` picks another CPU.

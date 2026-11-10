@@ -17,6 +17,7 @@
   ],
   "approve_blocker": null,
   "cycle_time_ns": 1000000,
+  "sync_mode": "drive_default",
   "command_stale_timeout_ns": 50000000,
   "fault_reset_policy": "none",
   "required_bench_items": ["assembly-match", "idle-non-oe", "start-rtso", "release-oe", "stale-engage", "disable-engage", "stop-quiesce"],
@@ -28,9 +29,9 @@
     {"name": "j4", "slave": 2, "ring_position": 2, "channel": 2, "od_offset": 2048, "mode": "cst", "position_min_rad": -1.0, "position_max_rad": 1.5, "velocity_limit_rad_s": 2.0, "velocity_cap_rad_s": 2.0, "acceleration_limit_rad_s2": null, "torque_min_nm": -30.0, "torque_max_nm": 40.0, "encoder_resolution": 65536, "flip": false, "rated_torque_mnm": null}
   ],
   "slaves": [
-    {"ring_position": 5, "pdo_mapping": "declared", "startup_sdo": []},
-    {"ring_position": 0, "pdo_mapping": "declared", "startup_sdo": []},
-    {"ring_position": 2, "pdo_mapping": "declared", "startup_sdo": []}
+    {"ring_position": 5, "vendor_id": 12648430, "product_code": 4097, "pdo_mapping": "declared", "startup_sdo": []},
+    {"ring_position": 0, "vendor_id": 12648430, "product_code": 4097, "pdo_mapping": "declared", "startup_sdo": []},
+    {"ring_position": 2, "vendor_id": 12648430, "product_code": 4097, "pdo_mapping": "declared", "startup_sdo": []}
   ],
   "not_judged": "a scanned slave's PDO mapping is read from the drive when the bus starts and judged then, with the same rules as a declared one; the live slave identity (SII serial, 0x1009, 0x100A, scanned PDO mapping digest), fault-reset pacing against the period and the DC sync0 rules are judged at startup too; the drive accepts or refuses its startup SDOs (startup_sdo, and the 0x1C32:02 written for dc.write_cycle_time) at PREOP->SAFEOP; a SYNC0 cycle it cannot run is refused at PREOP->SAFEOP, or later as a sync error that drops the slave out of OP after it reached OP (documented drive behaviour, not a guarantee for every drive); both show in the kernel log"
 }
