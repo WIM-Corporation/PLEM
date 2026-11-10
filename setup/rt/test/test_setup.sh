@@ -23,6 +23,9 @@
 # - /etc/ethercat.conf: comments come from a quoted heredoc (nothing in them runs), values unchanged.
 # - The wizard directory is resolved once and stays right after a cd; Phase 3 leaves and removes
 #   the build directory when a step fails.
+# - Menu 5 (USB adapter drivers): upstream tag from the headers' Makefile, local includes, kernel source vs an
+#   error page, vermagic, the per-driver skip decision, the fetch-build-install flow with its failure reports,
+#   and the menu 2 check.
 # Functions are sourced from a copy without the entry point, with system commands stubbed.
 set -euo pipefail
 
@@ -704,6 +707,13 @@ log="$(sed -n 's/^LOG=//p' <<<"$out")"
 p3_s2_body="$(sed -n '/^p3_s2_dependencies() {$/,/^}$/p' "$WIZ")"
 grep -qE '^    local pkgs=\(.* git( |\))' <<<"$p3_s2_body" || fail "p3_s2_dependencies must install git: ${p3_s2_body}"
 
+# Phase 3 stops at step 2 when dpkg says build-essential is installed but cc is gone from PATH.
+nocc="${tmp}/nocc"; mkdir -p "$nocc"; ln -sf "$(command -v grep)" "$(command -v make)" "$nocc/"
+out="$(probe 'dpkg() { echo "ii  x"; }; PATH='"$nocc"'; p3_s2_dependencies; echo "RC=$? R=${PHASE3_RESULTS[*]}"')"
+[[ "$out" == *"RC=1 R=failed"* && "$out" == *"--reinstall gcc"* ]] || fail "p3_s2 must fail when cc is missing: ${out}"
+out="$(probe 'dpkg() { echo "ii  x"; }; p3_s2_dependencies; echo "RC=$? R=${PHASE3_RESULTS[*]}"')"
+[[ "$out" == *"RC=0 R=skipped"* ]] || fail "p3_s2 must skip when everything is present: ${out}"
+
 # A failure stays on screen: die() reports without waiting, and a menu item waits for Enter once,
 # after its summary, so returning to the menu (which clears the screen) never hides the failure.
 # read -p shows its prompt only on a terminal, so a read wrapper prints the prompt it was given.
@@ -813,5 +823,148 @@ probe 'remove_old_native_bind_units' >/dev/null
     || fail "remove_old_native_bind_units must remove the NIC IRQ tuning unit, script and drop-in: $(ls "${tmp}")"
 grep -qx "systemctl disable --now plem-ethercat-nic-irq-tune.service" "${tmp}/systemctl.log" \
     || fail "remove_old_native_bind_units must stop the NIC IRQ tuning unit: $(cat "${tmp}/systemctl.log")"
+
+# --- Menu 5: USB adapter drivers ---------------------------------------------------------
+# probe_val <expression> [setup code] → the expression's stdout alone (the wizard's exit trap writes terminal codes after it).
+probe_val() {
+    local o
+    o="$(probe "${2:-}
+echo \"<\$($1)>\"")" || true
+    o="${o#*<}"; echo "${o%>*}"
+}
+
+# The upstream tag comes from the header tree's Makefile (not `make kernelversion`, which adds -rt-tegra);
+# SUBLEVEL 0 is tag vX.Y, and a Makefile without the three numbers (a wrapper) is refused.
+for c in "5|15|148|5.15.148" "6|8|0|6.8" "6|8|12|6.8.12"; do
+    IFS='|' read -r mv mp ms want <<<"$c"
+    printf '%s\n' '# SPDX-License-Identifier: GPL-2.0' "VERSION = ${mv}" "PATCHLEVEL = ${mp}" "SUBLEVEL = ${ms}" \
+        'EXTRAVERSION = -rt-tegra' 'NAME = x' 'SUBLEVEL = 99' >"${tmp}/Makefile.k"
+    out="$(probe_val "kernel_upstream_version '${tmp}/Makefile.k'")"
+    [[ "$out" == "$want" ]] || fail "kernel_upstream_version must be ${want}: ${out}"
+done
+printf '%s\n' 'include /usr/src/linux-headers-x/Makefile' >"${tmp}/Makefile.k"
+for f in Makefile.k nonexistent; do
+    out="$(probe_val "kernel_upstream_version '${tmp}/${f}' && echo OK || echo NO")"
+    [[ "$out" == NO ]] || fail "kernel_upstream_version: ${f} (a wrapper Makefile, a missing file) must fail: ${out}"
+done
+
+# Local includes: only #include "name" from the same directory, in order.
+printf '%s\n' '// SPDX-License-Identifier: GPL-2.0+' '#include <linux/usb.h>' '#include "pl2303.h"' '  #  include "a.h" /* x */' \
+    '#include "../up.h"' '// #include "c.h"' >"${tmp}/src.c"
+out="$(probe_val "local_includes '${tmp}/src.c' | paste -sd' '")"
+[[ "$out" == "pl2303.h a.h" ]] || fail "local_includes: ${out}"
+
+# Kernel source vs an error page: the first line must be an SPDX tag.
+printf '%s\n' '/* SPDX-License-Identifier: GPL-2.0+ */' '#define X 1' >"${tmp}/ok.h"
+printf '%s\n' '<!DOCTYPE html>' '<html><body>SPDX-License-Identifier</body></html>' >"${tmp}/page.html"
+: >"${tmp}/empty.c"
+for c in "ok.h|Y" "src.c|Y" "page.html|N" "empty.c|N" "nonexistent|N"; do
+    IFS='|' read -r f want <<<"$c"
+    out="$(probe_val "is_kernel_source '${tmp}/${f}' && echo Y || echo N")"
+    [[ "$out" == "$want" ]] || fail "is_kernel_source ${f} must be ${want}: ${out}"
+done
+
+# vermagic: the first word must be exactly the release.
+for c in "5.15.148-rt-tegra SMP preempt_rt mod_unload modversions aarch64|5.15.148-rt-tegra|Y" \
+         "5.15.148-tegra SMP mod_unload|5.15.148-rt-tegra|N" "5.15.148-rt-tegra-x SMP|5.15.148-rt-tegra|N" \
+         "|5.15.148-rt-tegra|N" "5.15.148-rt-tegra|5.15.148-rt-tegra|Y" "|.|N"; do
+    IFS='|' read -r vm rel want <<<"$c"
+    out="$(probe_val "vermagic_matches '${vm}' '${rel}' && echo Y || echo N")"
+    [[ "$out" == "$want" ]] || fail "vermagic_matches '${vm}' '${rel}' must be ${want}: ${out}"
+done
+
+# Driver state: =y built in, =m in-tree module, otherwise a module modinfo finds for this release, else missing.
+# modinfo is a function: usb.vermagic holds what it reports for "-k <release> -F vermagic <name>".
+modinfo_stub='modinfo() { [[ "$1 $3 $4" == "-k -F vermagic" ]] || return 9; [[ -s "'"${tmp}"'/usb.vermagic" ]] || return 1; cat "'"${tmp}"'/usb.vermagic"; }'
+for c in "CONFIG_USB_SERIAL_CH341=y||built-in" "CONFIG_USB_SERIAL_CH341=m||in-tree" \
+         "# CONFIG_USB_SERIAL_CH341 is not set|R SMP|installed" "# CONFIG_USB_SERIAL_CH341 is not set|R2 SMP|missing" \
+         "# CONFIG_USB_SERIAL_CH341 is not set||missing" "CONFIG_USB_SERIAL_CH341X=y||missing"; do
+    IFS='|' read -r line vm want <<<"$c"
+    if [[ -n "$vm" ]]; then echo "$vm" >"${tmp}/usb.vermagic"; else : >"${tmp}/usb.vermagic"; fi
+    printf '%s\n' CONFIG_USB_SERIAL=y "$line" CONFIG_X=m >"${tmp}/usb.config"
+    out="$(probe_val "usb_driver_state ch341 CONFIG_USB_SERIAL_CH341 R <'${tmp}/usb.config'" "$modinfo_stub")"
+    [[ "$out" == "$want" ]] || fail "usb_driver_state '${line}' modinfo '${vm}' must be ${want}: ${out}"
+done
+
+# Menu 5 end to end with every system command stubbed (nothing reaches /lib/modules or the network):
+# gs_usb built in and ch341 installed are skipped; pl2303 is fetched with its local header, built, checked,
+# installed, and depmod runs once; afterwards modinfo finds it.
+cat >"${tmp}/usb_stubs.sh" <<EOF
+clear() { :; }; print_env() { :; }; uname() { echo R; }; kernel_headers_match() { :; }
+zcat() { printf '%s\n' \${USB_KCONFIG:-CONFIG_CAN_GS_USB=y '# CONFIG_USB_SERIAL_CH341 is not set' '# CONFIG_USB_SERIAL_PL2303 is not set'}; }
+kernel_upstream_version() { echo 5.15.148; }
+curl() {
+    local o="" url=""
+    while [[ \$# -gt 0 ]]; do case "\$1" in -o) o="\$2"; shift ;; http*) url="\$1" ;; esac; shift; done
+    echo "\$url" >>"${tmp}/usb.urls"
+    if [[ -n "\${USB_HTML:-}" ]]; then echo "<html>" >"\$o"; return 0; fi
+    case "\$url" in
+        *pl2303.c\?h=v5.15.148) printf '%s\n' '// SPDX-License-Identifier: GPL-2.0' '#include "pl2303.h"' >"\$o" ;;
+        *pl2303.h\?h=v5.15.148) printf '%s\n' '/* SPDX-License-Identifier: GPL-2.0 */' >"\$o" ;;
+        *) return 22 ;;
+    esac
+}
+make() {
+    echo "make \$*" >>"${tmp}/usb.log"
+    local m; for m in "\$@"; do [[ "\$m" == M=* ]] && : >"\${m#M=}/pl2303.ko"; done
+    [[ -z "\${USB_MAKE_FAIL:-}" ]]
+}
+modinfo() {
+    case "\$*" in
+        "-F vermagic "*.ko) echo "\${USB_KO_VM:-R SMP}" ;;
+        "-k R -F vermagic ch341") echo "R SMP" ;;
+        "-k R -F vermagic pl2303") [[ -e "${tmp}/usb.depmod" ]] && echo "R SMP" ;;
+        *) return 1 ;;
+    esac
+}
+install() { echo "install \$*" >>"${tmp}/usb.log"; }
+depmod() { echo "depmod \$*" >>"${tmp}/usb.log"; : >"${tmp}/usb.depmod"; }
+EOF
+usb_run() {  # usb_run [extra shell code] → menu 5 output without colors, then R=<results>
+    rm -f "${tmp}/usb.log" "${tmp}/usb.urls" "${tmp}/usb.depmod"
+    probe "source '${tmp}/usb_stubs.sh'; ${1:-}
+run_usb_drivers <<<\$'\n\n'; echo \"R=\${USB_RESULTS[*]}\"" | sed 's/\x1b\[[0-9;]*m//g'
+}
+out="$(usb_run)"
+[[ "$out" == *"R=skipped skipped done"* ]] || fail "menu 5: built-in and installed skip, missing is built: ${out}"
+kurl="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/plain/drivers/usb/serial"
+[[ "$(cat "${tmp}/usb.urls")" == "${kurl}/pl2303.c?h=v5.15.148"$'\n'"${kurl}/pl2303.h?h=v5.15.148" ]] \
+    || fail "menu 5 must fetch pl2303.c and its local header at the tag: $(cat "${tmp}/usb.urls")"
+grep -q '^make -C /lib/modules/R/build M=.*/pl2303 modules$' "${tmp}/usb.log" || fail "menu 5 make: $(cat "${tmp}/usb.log")"
+grep -q '^install -D -m 0644 .*/pl2303/pl2303.ko /lib/modules/R/updates/plem/pl2303.ko$' "${tmp}/usb.log" \
+    || fail "menu 5 install: $(cat "${tmp}/usb.log")"
+[[ "$(grep -c '^depmod' "${tmp}/usb.log")" == 1 ]] && grep -qx 'depmod R' "${tmp}/usb.log" \
+    || fail "menu 5 must run depmod R once: $(cat "${tmp}/usb.log")"
+# A run with nothing missing downloads and builds nothing.
+out="$(USB_KCONFIG='CONFIG_CAN_GS_USB=y CONFIG_USB_SERIAL_CH341=m CONFIG_USB_SERIAL_PL2303=y' usb_run)"
+[[ "$out" == *"R=skipped skipped skipped"* && ! -e "${tmp}/usb.urls" && ! -e "${tmp}/usb.log" ]] \
+    || fail "menu 5 with nothing missing must change nothing: ${out}"
+# Failures name what failed and how to fix it, on the spot and in the summary, and install nothing.
+for c in "USB_HTML|is not kernel source" "USB_MAKE_FAIL|Build of pl2303" "USB_KO_VM|was built for 'R2'"; do
+    IFS='|' read -r var msg <<<"$c"
+    out="$(export "${var}=R2 SMP"; usb_run)"
+    [[ "$out" == *"R=skipped skipped failed"* && "$(grep -c "$msg" <<<"$out")" -ge 2 && "$out" == *"Fix: "* ]] \
+        || fail "menu 5 failure (${var}) must be reported with the reason and a fix, on the spot and in the summary: ${out}"
+    ! grep -qE '^(install|depmod)' "${tmp}/usb.log" 2>/dev/null || fail "menu 5 failure (${var}) must install nothing: $(cat "${tmp}/usb.log")"
+done
+# depmod that does not make the module findable is a failure too.
+out="$(usb_run 'depmod() { echo "depmod $*" >>"'"${tmp}"'/usb.log"; }')"
+[[ "$out" == *"R=skipped skipped failed"* && "$out" == *"Fix: "* ]] || fail "menu 5: a module modprobe cannot find must fail: ${out}"
+# Prerequisites: a failed header check fails every missing driver before any download.
+out="$(usb_run 'kernel_headers_match() { return 1; }')"
+[[ "$out" == *"R=skipped skipped failed"* && ! -e "${tmp}/usb.urls" ]] || fail "menu 5: failed header check: ${out}"
+
+# Menu 2 reports each driver from the kernel config and modinfo; menu 5 is in the main menu.
+p2_usb="$(sed -n '/^    # USB adapter drivers/,/^    done$/p' <<<"$p2_body")"
+grep -qF 'usb_driver_state' <<<"$p2_usb" || fail "run_phase2 USB driver block not found: ${p2_usb}"
+echo "R SMP" >"${tmp}/usb.vermagic"
+out="$(probe "${modinfo_stub}; zcat() { printf '%s\n' CONFIG_CAN_GS_USB=y CONFIG_USB_SERIAL_CH341=m; }; k=R
+modinfo() { [[ \"\$*\" == '-k R -F vermagic pl2303' ]] && return 1; echo 'R SMP'; }
+p2_check() { echo \"P2 \$1|\$2|\$3\"; }; f() {
+${p2_usb}
+}; f")"
+[[ "$out" == *"P2 USB driver gs_usb|pass|"* && "$out" == *"P2 USB driver ch341|pass|"* && "$out" == *"P2 USB driver pl2303|warn|"*"menu 5"* ]] \
+    || fail "Phase 2 USB drivers: ${out}"
+grep -qF 'run_usb_drivers' <<<"$(sed -n '/^main_menu() {$/,/^}$/p' "$WIZ")" || fail "main_menu does not offer run_usb_drivers"
 
 echo "PASS: test_setup"

@@ -1107,3 +1107,50 @@ def test_a_side_process_starts_only_while_its_spawner_lives(
     run._spawn_child(["touch", str(ran)])
     assert started[0].wait(timeout=5) == (0 if spawner_alive else 1)
     assert ran.exists() == spawner_alive
+
+
+def _fleet_check():
+    return {
+        "cycle_time_ns": 1000000,
+        "sync_mode": "drive_default",
+        "slaves": [{"ring_position": 0, "vendor_id": 7, "product_code": 9}],
+        "axes": [{"name": "a", "slave": 0, "mode": "csp"}],
+    }
+
+
+def test_a_session_is_reported_only_with_consent(monkeypatch):
+    from plem.drive import fleet
+
+    spawned = []
+    monkeypatch.setattr(
+        run, "_spawn_child", lambda argv, output=None: spawned.append((argv, output))
+    )
+
+    monkeypatch.setattr(fleet, "active_state", lambda: None)
+    run._start_fleet_session("/bus", _fleet_check())
+    assert spawned == []
+
+    monkeypatch.setattr(fleet, "active_state", lambda: {"enabled": True})
+    run._start_fleet_session("/bus", _fleet_check())
+    [(argv, output)] = spawned
+    assert argv[1:4] == ["-m", "plem.drive.cli.fleet_session", "/bus"]
+    assert json.loads(argv[4])["slaves"][0]["vendor_id"] == 7
+    assert str(output) == os.devnull  # nothing of it reaches the operator's terminal
+
+
+def test_a_problem_preparing_the_report_does_not_stop_the_bus(monkeypatch):
+    from plem.drive import fleet
+
+    monkeypatch.setattr(fleet, "active_state", lambda: {"enabled": True})
+    spawned = []
+    monkeypatch.setattr(run, "_spawn_child", lambda *a, **k: spawned.append(a))
+    run._start_fleet_session("/bus", {})  # an output this code cannot read
+    assert spawned == []
+
+    def broken_spawn(*_args, **_kwargs):
+        raise RuntimeError("anything at all")
+
+    monkeypatch.setattr(run, "_spawn_child", broken_spawn)
+    run._start_fleet_session("/bus", _fleet_check())
+    monkeypatch.setattr(fleet, "active_state", broken_spawn)
+    run._start_fleet_session("/bus", _fleet_check())

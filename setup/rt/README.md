@@ -1,22 +1,23 @@
 # Jetson RT kernel and EtherCAT setup and verification wizard
 
 > **Target devices:** NVIDIA Jetson AGX Orin Developer Kit (where it has run). Written to handle Orin NX and Orin Nano too; not run on them.
-> **Software:** JetPack 7.2.1 (L4T r39.2.1, RT kernel `6.8.x-rt-tegra`). Menus 1 to 3 ran on an AGX Orin devkit with both the built-in RJ45 port (generic driver) and an Intel I210 (native driver; that devkit was set up with an earlier version of this wizard, see [`docs/hardware-evidence.md`](../../docs/hardware-evidence.md)). Menu 4 has not run a measurement, and menu 3's reinstall path (`Reinstall? (y/N)`) has not been run there. This is the platform of the drive software in this repository ([`docs/install.md`](../../docs/install.md)).
+> **Software:** JetPack 7.2.1 (L4T r39.2.1, RT kernel `6.8.x-rt-tegra`). Menus 1 to 3 ran on an AGX Orin devkit with both the built-in RJ45 port (generic driver) and an Intel I210 (native driver; that devkit was set up with an earlier version of this wizard, see [`docs/hardware-evidence.md`](../../docs/hardware-evidence.md)). Menu 4 has not run a measurement, and menu 3's reinstall path (`Reinstall? (y/N)`) has not been run there. Menu 5 has not run on a device; its downloads and builds were run by hand on a JetPack 6 RT kernel (`5.15.148-rt-tegra`), without installing or loading the modules. This is the platform of the drive software in this repository ([`docs/install.md`](../../docs/install.md)).
 > The wizard reads the L4T release line from the device's apt sources and picks the matching rt-kernel repository.
 
 `setup.sh` is an interactive script that installs the official NVIDIA RT kernel (`nvidia-l4t-rt-kernel`,
-`CONFIG_PREEMPT_RT`), isolates a CPU, sets up the IgH EtherCAT master and runs RT load tests.
-It installs what it needs with apt (menu 3 also clones IgH with git): this directory alone is enough to install, verify, and run the load tests.
+`CONFIG_PREEMPT_RT`), isolates a CPU, sets up the IgH EtherCAT master, runs RT load tests and builds the USB adapter drivers the kernel lacks.
+It installs what it needs with apt (menu 3 also clones IgH with git, and menu 5 downloads kernel driver sources from git.kernel.org): this directory alone is enough to install, verify, and run the load tests.
 
 ## Contents
 
 | File | Description |
 | --- | --- |
-| `setup.sh` | Menu-driven wizard: install, verify, EtherCAT, load tests |
+| `setup.sh` | Menu-driven wizard: install, verify, EtherCAT, load tests, USB adapter drivers |
 | `nvpps-tsc-unlock.sh` | nvpps TSC unlock (DTB property + extlinux FDT). Menu 1 installs and runs it. It can also be run on its own (`sudo plem-nvpps-tsc-unlock`) |
 | `crash-logging.sh` | Persistent logs + reboot after a kernel panic. Menu 1 runs it, menu 2 runs it with `--check` (no writes). It can also be run on its own (`sudo bash setup/rt/crash-logging.sh`) |
+| `rt-initrd.sh` | Puts the RT kernel's modules into `/boot/initrd`. Menu 1 runs it, menu 2 runs it with `--check` (no writes). It can also be run on its own (`sudo bash setup/rt/rt-initrd.sh`) |
 | `99-plem-realtime.conf` | Real-time scheduling limits for the `realtime` group. Menu 1 installs it as `/etc/security/limits.d/99-plem-realtime.conf`. If the file goes missing, run menu 1 again |
-| `test/` | Hermetic tests of `setup.sh`, `crash-logging.sh` and the menu 3 NIC rebind helper (`bash setup/rt/test/test_setup.sh` and the others); they touch no real system file |
+| `test/` | Hermetic tests of `setup.sh`, `crash-logging.sh`, `rt-initrd.sh` and the menu 3 NIC rebind helper (`bash setup/rt/test/test_setup.sh` and the others); they touch no real system file |
 | `LICENSE` | License for the files in this directory |
 
 ## Quick start
@@ -37,8 +38,20 @@ Command output goes to `/tmp/rt-wizard-<random>.log`; a failed step prints its p
 | **2. Verify setup** | After reboot | Checks automatically that the menu 1 settings took effect |
 | **3. Install EtherCAT master** | After booting the RT kernel | Builds, configures, and registers the IgH EtherCAT master service |
 | **4. RT jitter load test** | When an isolated CPU exists | Measures scheduling jitter on the isolated CPU under load with `cyclictest`, 1→5 kHz |
+| **5. Install USB adapter drivers** | On the kernel to build for (RT or stock) | Builds and installs the USB-CAN and USB-serial adapter drivers the kernel ships disabled |
 
-Typical order: **1 → reboot → 2 → 3 → 4**.
+Typical order: **1 → reboot → 2 → 3 → 4**, and **5** on a device that uses a USB-CAN or USB-serial adapter.
+
+## Device reporting
+
+Before the menu, the wizard asks once whether to share device data with WIM, and offers an optional email address.
+[`docs/telemetry.md`](../../docs/telemetry.md) lists what is sent and how it is kept. Either answer is saved in
+`/etc/plem/fleet.json`. A Yes also adds `/usr/local/sbin/plem-fleet`, the `plem-fleet` timer and service, and
+`/var/lib/plem/fleet`. Giving an email address also installs `/usr/local/sbin/plem-fleet`, so the address can be
+removed later. `sudo plem-fleet off` turns it off and removes the timer and the queued reports.
+
+The question needs the rest of this repository. Run from a copy of this directory alone, or with `PLEM_TELEMETRY=off`,
+the wizard does not ask and nothing is sent.
 
 ---
 
@@ -59,7 +72,8 @@ The wizard applies the following.
 | Wi-Fi tuning | NetworkManager `wifi.powersave = 2`, a dispatcher running `iw ... power_save off`, RTL8822CE modprobe options | Prevents Wi-Fi power-save wakeups and latency spikes |
 | Disable unused services (optional) | Menu 1 asks first (default no; yes with `--baseline`, on a device where it was applied before, or when all are already off). Menu 2 warns if a unit comes back on after it was applied. Turns off bluetooth, ModemManager, avahi, apport, kerneloops, power-profiles-daemon, packagekit, rtkit, background timers such as apt-daily, and desktop audio (pipewire, pulseaudio). gdm is kept. Masking packagekit makes `apt update` and every package install or removal end with a harmless `GDBus.Error … packagekit.service is masked` line: Ubuntu's apt hook still tries to notify it | Prevents features a control computer does not use from consuming CPU and disk or getting RT priority |
 | Crash logging | Persistent journald storage (`Storage=persistent`, limit = 2 % of the root filesystem, at most 2 GiB) + `kernel.panic=10` (`crash-logging.sh`) | Logs survive a reboot, and after a kernel panic the system reboots after 10 seconds instead of waiting 120 seconds for the watchdog |
-| nvpps TSC unlock | Adds the nvpps `ptp_tsc_sync_dis` property to `/boot/dtb/kernel_*.dtb`, and adds an `FDT` line for that DTB to each label without FDT except primary (`nvpps-tsc-unlock.sh`, installed as `/usr/local/sbin/plem-nvpps-tsc-unlock`) | When nvpps locks the TSC to the PHC of the built-in RJ45 port (MGBE0: `end0` on JetPack 7.2.1) and that port has no PTP grandmaster, the clock periodically slips by ±140 ppm and the EtherCAT DC error grows to hundreds of µs |
+| RT initrd modules | Rebuilds `/boot/initrd` so it carries the modules of every installed kernel, including `<version>-rt-tegra` (`rt-initrd.sh`) | Both extlinux labels load the same initrd, and it insmods storage drivers by absolute path under `/lib/modules/<version>`. L4T's `nv-update-initrd` loops over `/boot/Image` and `/boot/Image.real-time`. On L4T 36.4.3 (JetPack 6) it deletes the shared file list after the first image, so the RT modules never make it in. With the rootfs on NVMe the RT kernel then cannot load `nvme.ko` and the boot stops at `ERROR: mounting PARTUUID=... fail`; after three such boots UEFI marks the slot unbootable (`RootfsStatusSlotA=0xFF`) and only the recovery initrd comes up. On L4T 39.2.1 (JetPack 7.2.1) both kernels' modules are already in the initrd, and the step changes nothing |
+| nvpps TSC unlock | Adds the nvpps `ptp_tsc_sync_dis` property to `/boot/dtb/kernel_*.dtb`, and adds an `FDT` line for that DTB to each label without FDT except primary (`nvpps-tsc-unlock.sh`, installed as `/usr/local/sbin/plem-nvpps-tsc-unlock`). On a USB (Jetson ISO) install, which has no `/boot/dtb/`, it first creates `/boot/dtb/kernel_<board>.dtb` from the `/boot` DTB that the firmware boots | When nvpps locks the TSC to the PHC of the built-in RJ45 port (MGBE0: `end0` on JetPack 7.2.1) and that port has no PTP grandmaster, the clock periodically slips by ±140 ppm and the EtherCAT DC error grows to hundreds of µs |
 | RT permission | Creates the `realtime` system group, installs `99-plem-realtime.conf` (members get `SCHED_FIFO` priority up to 99 and unlimited locked memory), and adds the user who ran `sudo` to the group. Takes effect at that user's next login | Lets control loops run real-time as a normal user instead of root |
 
 - **Isolated CPU selection:** The default is the CPU isolated at boot (the last one if several). When none is isolated
@@ -82,6 +96,12 @@ the lock turns back on and the system still boots, and menu 2 warns about it. In
 Each edit keeps the previous files: the DTB as `/boot/dtb/.plem-bak-<name>.dtb` and extlinux as
 `/boot/extlinux/extlinux.conf.plem-bak`.
 
+A USB (Jetson ISO) install has neither `/boot/dtb/` nor an `FDT` line, so the firmware boots the DTB in the
+`kernel-dtb` partition of the boot slot (`nvbootctrl get-current-slot`). There the script first creates
+`/boot/dtb/kernel_<board>.dtb` from the `/boot/<board>.dtb` whose bytes that partition starts with, and stops without
+writing anything if no `/boot/*.dtb` matches or the match's `compatible` is not the running board's. After that, the labels boot this file instead of the firmware's copy. Restoring
+`/boot/extlinux/extlinux.conf.plem-bak` removes the `FDT` lines and returns to the firmware's DTB.
+
 Devices that synchronize time over PTP on the built-in RJ45 port must keep the lock. Run `sudo mkdir -p /etc/plem && sudo touch
 /etc/plem/nvpps-lock-keep`, then run the script (or menu 1) again to remove the property. Devices with Secure Boot
 enabled are skipped, because the DTB would need to be signed.
@@ -91,7 +111,7 @@ enabled are skipped, because the DTB would need to be signed.
 ## 2. Verify setup (after reboot)
 
 After rebooting, run menu 2 to check that the items above took effect (`PREEMPT_RT` kernel,
-isolated CPU, boot parameters the kernel ignored, RT throttling default, swap, CPU idle (deep idle states), power mode and clocks, and more; once menu 3 has run, also that `/dev/EtherCAT*` is mode 0660 group `realtime` and that the user who ran `sudo` is a member).
+isolated CPU, boot parameters the kernel ignored, RT throttling default, swap, CPU idle (deep idle states), power mode and clocks, and more; once menu 3 has run, also that `/dev/EtherCAT*` is mode 0660 group `realtime` and that the user who ran `sudo` is a member; and whether each menu 5 driver is available for the running kernel, a warning naming menu 5 when one is missing).
 Finally, it runs a 1 kHz cyclictest on the isolated CPU for 30 seconds (no load; load measurement is menu 4). For commands to check by hand,
 see the [verification cheat sheet](#verification-cheat-sheet).
 
@@ -151,6 +171,40 @@ Runs `cyclictest` on the isolated CPU **together with concurrent system load** a
 RT scheduling alone, run before the application: it refuses while a user RT thread (such as a running
 `plem drive run`) is on the isolated CPU, because cyclictest at priority 99 would preempt that loop.
 
+## 5. Install USB adapter drivers (RT or stock kernel)
+
+The JetPack 6 and JetPack 7 kernels (stock and RT) ship these USB adapter drivers disabled (`is not set` in `/proc/config.gz`); menu 5 reads the running kernel's configuration and skips any driver it already has:
+
+| Module | Kernel option | Adapters |
+| --- | --- | --- |
+| `gs_usb` | `CONFIG_CAN_GS_USB` | candleLight/gs_usb-compatible USB-CAN adapters |
+| `ch341` | `CONFIG_USB_SERIAL_CH341` | CH340/CH341 USB-serial adapters |
+| `pl2303` | `CONFIG_USB_SERIAL_PL2303` | PL2303 USB-serial adapters |
+
+Menu 5 builds them on the device for the running kernel. Nothing is fixed to a JetPack or kernel version: it takes the
+upstream version from the Makefile of `/lib/modules/$(uname -r)/build` (for example `5.15.148`, tag `v5.15.148`, on JetPack 6 and `6.8.12` on JetPack 7), downloads
+each driver's source file of that tag, and the files it includes with `#include "…"` from its own directory, from the stable
+kernel tree on git.kernel.org, and builds it against the installed headers. No prebuilt module is shipped.
+
+For each driver, it:
+
+1. Skips it when the running kernel already has it (`=y` or `=m` in `/proc/config.gz`), or when a module for this kernel
+   is already installed (`modinfo -k $(uname -r)` finds it with a matching vermagic). A re-run downloads nothing then.
+2. Otherwise checks, before downloading, that the kernel headers match the running kernel (the same check as menu 3) and
+   that `curl`, `make` and `gcc` are installed.
+3. Refuses a downloaded file that is not kernel source (its first line must be an SPDX tag: the server can answer with
+   an HTML page), builds the module, and checks that its vermagic is the running kernel's release.
+4. Installs it as `/lib/modules/$(uname -r)/updates/plem/<module>.ko`, then runs `depmod` once and checks that
+   `modinfo` now finds each new module.
+
+Menu 5 builds for whichever kernel is running, RT or stock, and is not locked before the RT reboot. It writes no
+`/etc/modules-load.d` entry: each module carries its adapters' USB IDs (`modinfo -F alias`), which the kernel matches to
+pick a driver when a device is plugged in; loading on a plugged-in adapter has not been tried yet. A build may print a
+"compiler differs" warning (the system gcc is not the one the kernel was built with); the test builds completed with it,
+and the built modules were not loaded. Any failure is shown at the step
+and again in the summary, with what failed and how to fix it. The modules belong to one kernel release: after a kernel
+update, run menu 5 again (menu 2 reports a missing driver).
+
 ---
 
 ## Verification cheat sheet
@@ -179,6 +233,9 @@ systemctl is-active jetson-clocks.service   # active
 sudo ethercat master
 sudo ethercat slaves
 systemctl is-active ethercat
+
+# USB adapter drivers (after menu 5)
+modinfo -F vermagic gs_usb ch341 pl2303     # each line starts with $(uname -r)
 ```
 
 ## Removing the RT kernel

@@ -118,7 +118,8 @@ flowchart LR
 
 PLEM is a robot control platform for NVIDIA Jetson. This repository holds the drive layer it is built on: the
 real-time core and the EtherCAT drive control, with one drive model (a Panasonic A6B pair) as the worked example. The
-rest of the platform is not published here. PLEM is made by WIM:
+rest of the platform is not published here; its documentation and release notes are at
+[www.wimcorp.co.kr/plem](https://www.wimcorp.co.kr/plem). PLEM is made by WIM:
 [www.wimcorp.co.kr](https://www.wimcorp.co.kr/en).
 
 ## Where to start
@@ -187,6 +188,13 @@ Each package installs its headers to `<prefix>/include/<package>/`. Use them thr
 (`find_package` + `target_link_libraries`), not a hand-written include path.
 
 </details>
+
+## Device reporting
+
+The setup wizard asks once whether to share device data with WIM. If you answer Yes, a timer (about every two hours) and each
+`plem drive run` report the device's hardware, software versions, health and EtherCAT session statistics. Nothing is
+sent if you answer No, or on a device where nobody answered. Turn it off any time with `sudo plem-fleet off`.
+[`docs/telemetry.md`](docs/telemetry.md) lists what is sent, what is not, and how long it is kept.
 
 ## Contributing and security
 

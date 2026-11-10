@@ -665,6 +665,7 @@ def main(argv: list[str]) -> int:
         )
     if args.monitor:  # its lines in this terminal; Ctrl-C ends it with its totals
         _spawn_child([sys.executable, "-m", "plem.drive.cli.monitor", ns])
+    _start_fleet_session(ns, check)
     if args.plot:
         layout = workdir / "plotjuggler.xml"
         layout.write_text(plot_layout(ns[1:], [a["name"] for a in check["axes"]]))
@@ -749,6 +750,30 @@ def plem_drive_command() -> str:
     from ament_index_python.packages import get_package_prefix
 
     return os.path.join(get_package_prefix("plem_drive"), "bin", "plem-drive")
+
+
+def _start_fleet_session(ns: str, check: dict) -> None:
+    """Report this session if the operator agreed (docs/telemetry.md). Reporting
+    must never stop a bus, so a problem here means this session is not reported."""
+    try:
+        from plem.drive import fleet
+        from plem.drive.cli.fleet_session import session_context
+
+        if fleet.active_state() is None:
+            return
+        context = session_context(check)
+        _spawn_child(
+            [
+                sys.executable,
+                "-m",
+                "plem.drive.cli.fleet_session",
+                ns,
+                json.dumps(context),
+            ],
+            output=pathlib.Path(os.devnull),
+        )
+    except Exception:  # noqa: BLE001 — whatever went wrong, the bus still starts
+        return
 
 
 def _spawn_child(argv: list[str], output: pathlib.Path | None = None) -> None:

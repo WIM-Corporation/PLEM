@@ -171,6 +171,7 @@ spin_stop() {
 cleanup() {
     spin_stop
     tput cnorm 2>/dev/null
+    fleet_report
     # Keep a log with content: a failed step printed its path, and the user quits with q (exit 0) afterwards.
     if [[ -s "$CMD_LOG" ]]; then echo -e "  ${DIM}Log: ${CMD_LOG}${NC}" >&2; else rm -f "$CMD_LOG"; fi
 }
@@ -357,7 +358,7 @@ PHASE1_NAMES=(
     "Power mode MAXN" "Boot parameters" "jetson_clocks service" "Disable swap/zram"
     "Disable irqbalance" "Install rt-tests"
     "Wi-Fi tuning" "Crash logging" "Disable unused services" "nvpps TSC unlock"
-    "RT permission"
+    "RT permission" "RT initrd modules"
 )
 PHASE1_RESULTS=()
 
@@ -1083,6 +1084,25 @@ p1_s15() {
     else skip "Already set"; PHASE1_RESULTS+=("skipped"); fi
 }
 
+# RT initrd modules: without them the RT kernel cannot mount a rootfs on NVMe and the device boots into the
+# recovery initrd instead. rt-initrd.sh does the work; see its header.
+rt_initrd() {  # rt_initrd [--check] → the tool's state line; its full output goes to CMD_LOG
+    local out rc; out=$(bash "${WIZARD_DIR}/rt-initrd.sh" "$@" 2>&1); rc=$?
+    echo "$out" >> "$CMD_LOG"
+    tail -1 <<< "$out"
+    return $rc
+}
+
+p1_s16() {
+    p1_header 16
+    local st rc msg; st=$(rt_initrd); rc=$?; msg=${st#*: }
+    case "$rc:$st" in
+        0:applied:*)     info "${msg^}"; PHASE1_RESULTS+=("done") ;;
+        0:ok:*|0:n/a:*)  skip "${msg^}"; PHASE1_RESULTS+=("skipped") ;;
+        *)               die "$msg";     PHASE1_RESULTS+=("failed") ;;
+    esac
+}
+
 # Disabling unused services suits a dedicated control computer, not a desktop, so Phase 1 asks.
 # Default yes with --baseline, or when this device already had them disabled (a re-run keeps it so).
 ask_baseline() {
@@ -1137,7 +1157,7 @@ run_phase1() {
     cleanup_legacy
     # Independent tuning steps: continue-on-error is fine (each result in the table).
     p1_s4; p1_s5; p1_s6
-    p1_s7; p1_s8; p1_s9; p1_s10; p1_s11; p1_s12; p1_s13; p1_s14; p1_s15
+    p1_s7; p1_s8; p1_s9; p1_s10; p1_s11; p1_s12; p1_s13; p1_s14; p1_s15; p1_s16
     p1_summary
 
     echo -e "  After reboot, verify the install in ${BOLD}menu 2${NC}."
@@ -1158,9 +1178,11 @@ run_phase1() {
 
 PHASE2_RESULTS=()
 
+P2_LOG=()  # name|status of every check, for the device report: never msg, it can name users and paths
 p2_check() {
     local name="$1" status="$2" msg="$3"
     local sym
+    P2_LOG+=("${name}|${status}")
     case "$status" in
         pass) sym="${GREEN}✔${NC}"; PHASE2_RESULTS+=("pass") ;;
         fail) sym="${RED}✘${NC}"; PHASE2_RESULTS+=("fail") ;;
@@ -1303,6 +1325,14 @@ run_phase2() {
         p2_check "Crash logging" "warn" "${_cl#warn: }. Re-run menu 1"
     fi
 
+    # RT initrd modules. The tool's --check (no writes) decides.
+    local _ri
+    if _ri=$(rt_initrd --check); then
+        p2_check "RT initrd modules" "pass" "${_ri#*: }"
+    else
+        p2_check "RT initrd modules" "warn" "${_ri#warn: }. Re-run menu 1"
+    fi
+
     # Unused services
     local _bl; _bl=$(baseline_left_on)
     if [[ -z "$_bl" ]]; then
@@ -1376,6 +1406,15 @@ run_phase2() {
             && p2_check "Wi-Fi power save" "pass" "${_wifi_iface}: power_save off" \
             || p2_check "Wi-Fi power save" "warn" "${_wifi_iface}: power_save ${ps_status}"
     fi
+
+    # USB adapter drivers (menu 5 builds the missing ones). Reads the kernel config and modinfo only.
+    local _kcfg _d _mod _sym _st
+    _kcfg=$(zcat /proc/config.gz 2>/dev/null)
+    for _d in "${USB_DRIVERS[@]}"; do
+        IFS='|' read -r _mod _sym _ <<<"$_d"
+        _st="$(usb_driver_state "$_mod" "$_sym" "$k" <<<"$_kcfg")"
+        p2_check "USB driver ${_mod}" "$([[ $_st == missing ]] && echo warn || echo pass)" "$(usb_driver_note "$_st" "$k")"
+    done
 
     # Verify summary
     echo -e "  ${DIM}$(printf '─%.0s' $(seq 1 48))${NC}"
@@ -1452,6 +1491,7 @@ run_phase2() {
         avg_lat=$(echo "$ct_output" | grep -oP 'Avg:\s+\K[0-9]+' | head -1 || echo "")
 
         if [[ -n "$max_lat" ]]; then
+            CT_MAX_US=$max_lat CT_AVG_US=$avg_lat
             if [[ "$max_lat" -lt 100 ]]; then
                 p2_check "RT latency" "pass" "CPU ${iso_cpu} Max: ${max_lat}µs, Avg: ${avg_lat}µs"
             elif [[ "$max_lat" -lt 500 ]]; then
@@ -1563,6 +1603,30 @@ p3_summary() {
     done
     echo -e "  ${BOLD}└──────┴─────────────────────────┴──────────────────┘${NC}"
     echo ""
+}
+
+# Verify the installed kernel headers match the RUNNING kernel. Kernel modules such as
+# ec_master build against headers in /lib/modules/$(uname -r)/build; if that path is missing or
+# points at another kernel version, vermagic mismatches. That failure only shows up later as a
+# modprobe failure at service start (and gets swallowed), so fail fast here.
+kernel_headers_match() {  # <module named in the mismatch message>
+    local _krel _kbuild
+    _krel="$(uname -r)"
+    _kbuild="/lib/modules/${_krel}/build"
+    if [[ ! -e "$_kbuild" ]]; then
+        die "Kernel headers missing: no ${_kbuild}. Install the headers package of the running kernel (${_krel}): nvidia-l4t-rt-kernel-headers for the RT kernel, nvidia-l4t-kernel-headers for the stock one"
+        return 1
+    fi
+    # Compare the kernel release of the header tree the build symlink points to with the running kernel.
+    local _hdr_rel=""
+    if [[ -r "${_kbuild}/include/config/kernel.release" ]]; then
+        _hdr_rel="$(cat "${_kbuild}/include/config/kernel.release" 2>/dev/null || echo "")"
+    fi
+    if [[ -n "$_hdr_rel" && "$_hdr_rel" != "$_krel" ]]; then
+        die "Kernel header version mismatch: headers=${_hdr_rel} vs running kernel=${_krel}. ${1} would fail to load (vermagic)"
+        return 1
+    fi
+    detail "Kernel headers match: ${_krel}"
 }
 
 # --- Phase 3 step functions ---
@@ -1900,17 +1964,27 @@ p3_s2_dependencies() {
         dpkg -l "$pkg" 2>/dev/null | grep -q "^[hi]i" || { need_install=true; break; }
     done
 
+    local result=skipped
     if $need_install; then
         spin_start "Installing build dependencies..."
         apt-get update -qq >> "$CMD_LOG" 2>&1 || true
         if apt-get install -y -qq "${pkgs[@]}" >> "$CMD_LOG" 2>&1; then
-            spin_stop; info "Install done"; PHASE3_RESULTS+=("done")
+            spin_stop; info "Install done"; result=done
         else
             spin_stop; fail "Install failed"; PHASE3_RESULTS+=("failed"); return 1
         fi
     else
-        skip "Already installed"; PHASE3_RESULTS+=("skipped")
+        skip "Already installed"
     fi
+
+    # The package state does not prove the binaries exist: a package can stay "installed" after its
+    # file is gone (e.g. /usr/bin/gcc removed with an alternatives group), and configure then fails late.
+    if ! command -v cc >/dev/null || ! command -v make >/dev/null; then
+        fail "cc or make is not in PATH although build-essential is installed"
+        detail "Restore with: sudo apt-get install --reinstall gcc make, then run menu 3 again"
+        PHASE3_RESULTS+=("failed"); return 1
+    fi
+    PHASE3_RESULTS+=("$result")
 }
 
 p3_s3_clone() {
@@ -1948,27 +2022,7 @@ p3_s4_build() {
 
     cd "$ETHERCAT_SRC" || { fail "Cannot enter build directory ${ETHERCAT_SRC}"; PHASE3_RESULTS+=("failed"); return 1; }
 
-    # Verify the installed kernel headers match the RUNNING kernel. Kernel modules such as
-    # ec_master build against headers in /lib/modules/$(uname -r)/build; if that path is missing or
-    # points at another kernel version, vermagic mismatches. That failure only shows up later as a
-    # modprobe failure at service start (and gets swallowed), so fail fast here.
-    local _krel _kbuild
-    _krel="$(uname -r)"
-    _kbuild="/lib/modules/${_krel}/build"
-    if [[ ! -e "$_kbuild" ]]; then
-        die "Kernel headers missing: no ${_kbuild}. nvidia-l4t-rt-kernel-headers does not match the running kernel (${_krel})"
-        PHASE3_RESULTS+=("failed"); return 1
-    fi
-    # Compare the kernel release of the header tree the build symlink points to with the running kernel.
-    local _hdr_rel=""
-    if [[ -r "${_kbuild}/include/config/kernel.release" ]]; then
-        _hdr_rel="$(cat "${_kbuild}/include/config/kernel.release" 2>/dev/null || echo "")"
-    fi
-    if [[ -n "$_hdr_rel" && "$_hdr_rel" != "$_krel" ]]; then
-        die "Kernel header version mismatch: headers=${_hdr_rel} vs running kernel=${_krel}. ec_master would fail to load (vermagic)"
-        PHASE3_RESULTS+=("failed"); return 1
-    fi
-    detail "Kernel headers match: ${_krel}"
+    kernel_headers_match ec_master || { PHASE3_RESULTS+=("failed"); return 1; }
 
     [[ -f "Makefile" ]] && { make clean >> "$CMD_LOG" 2>&1 || true; }
 
@@ -2749,6 +2803,226 @@ run_loadsweep() {
 }
 
 # ============================================================================
+#  Menu 5: USB adapter drivers
+# ============================================================================
+# L4T kernels ship some common USB adapter drivers disabled. Menu 5 builds them on the device for the
+# running kernel, from the upstream stable source of the same kernel version (never a prebuilt module),
+# and installs them under updates/. Their USB ID aliases load them when an adapter is plugged in.
+# Everything comes from the running kernel: uname -r → its header tree → the upstream tag in its Makefile.
+
+# module|CONFIG symbol|in-tree source: candleLight/gs_usb-compatible USB-CAN, CH340/CH341 and PL2303 USB-serial.
+readonly USB_DRIVERS=(
+    "gs_usb|CONFIG_CAN_GS_USB|drivers/net/can/usb/gs_usb.c"
+    "ch341|CONFIG_USB_SERIAL_CH341|drivers/usb/serial/ch341.c"
+    "pl2303|CONFIG_USB_SERIAL_PL2303|drivers/usb/serial/pl2303.c"
+)
+readonly USB_DRIVER_SUBDIR="plem"   # /lib/modules/<release>/updates/<subdir>
+readonly KERNEL_STABLE_GIT="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+USB_RESULTS=() USB_NOTES=()   # per USB_DRIVERS index: done/skipped/failed, and what the summary says
+
+# Upstream version of a kernel tree from its top Makefile: 5.15.148, or 6.8 when SUBLEVEL is 0 (the tag is v6.8).
+# `make kernelversion` adds the local suffix (5.15.148-rt-tegra), which is no upstream tag.
+kernel_upstream_version() {  # <Makefile>
+    awk '$2 == "=" && $1 ~ /^(VERSION|PATCHLEVEL|SUBLEVEL)$/ && !($1 in v) { v[$1] = $3 }
+         END {
+             if (v["VERSION"] !~ /^[0-9]+$/ || v["PATCHLEVEL"] !~ /^[0-9]+$/ || v["SUBLEVEL"] !~ /^[0-9]+$/) exit 1
+             printf "%s.%s%s\n", v["VERSION"], v["PATCHLEVEL"], (v["SUBLEVEL"] == 0 ? "" : "." v["SUBLEVEL"])
+         }' "$1" 2>/dev/null
+}
+
+# Files a source includes with #include "name" from its own directory.
+local_includes() {  # <source file>
+    sed -nE 's/^[[:space:]]*#[[:space:]]*include[[:space:]]*"([^"/]+)".*/\1/p' "$1"
+}
+
+# git.kernel.org can answer a path it does not have with an HTML page and status 200, so a fetched file
+# counts as kernel source only when its first line is an SPDX tag (every file of these drivers has one).
+is_kernel_source() {  # <file>
+    local first=""
+    IFS= read -r first 2>/dev/null <"$1"
+    [[ "$first" == *SPDX-License-Identifier* ]]
+}
+
+vermagic_matches() {  # <vermagic> <kernel release>: the first vermagic word is the release a module was built for
+    [[ -n "$2" && "${1%% *}" == "$2" ]]
+}
+
+# One driver for kernel <release>, from that kernel's config on stdin: built-in, in-tree (a module of the kernel
+# itself), installed (a module modinfo finds with this release's vermagic), or missing. Reads only.
+usb_driver_state() {  # <module> <CONFIG symbol> <release>
+    case "$(sed -n "s/^${2}=\([ym]\)$/\1/p")" in
+        y) echo built-in; return ;;
+        m) echo in-tree; return ;;
+    esac
+    if vermagic_matches "$(modinfo -k "$3" -F vermagic "$1" 2>/dev/null)" "$3"; then echo installed; else echo missing; fi
+}
+
+usb_driver_note() {  # <state from usb_driver_state> <release>: what menus 2 and 5 say about it
+    case "$1" in
+        built-in)  echo "built into the kernel" ;;
+        in-tree)   echo "module of this kernel" ;;
+        installed) echo "installed for ${2}" ;;
+        *)         echo "missing for ${2}: run menu 5" ;;
+    esac
+}
+
+# Names of the drivers missing for the running kernel (space separated). Reads only.
+usb_drivers_missing() {
+    local krel kcfg d mod sym
+    krel="$(uname -r)"; kcfg="$(zcat /proc/config.gz 2>/dev/null)"
+    for d in "${USB_DRIVERS[@]}"; do
+        IFS='|' read -r mod sym _ <<<"$d"
+        [[ "$(usb_driver_state "$mod" "$sym" "$krel" <<<"$kcfg")" == missing ]] && printf '%s ' "$mod"
+    done
+}
+
+# Records drivers as failed: what failed and why ($1), how to fix it ($2). Shown now and again in the summary.
+usb_failed() {  # <why> <fix> <index>...
+    local why="$1" fix="$2" i; shift 2
+    fail "$why"; detail "Fix: ${fix}"
+    for i in "$@"; do USB_RESULTS[i]="failed"; USB_NOTES[i]="${why}. Fix: ${fix}"; done
+}
+
+usb_fetch() {  # <index> <tree path> <tag> <out file>
+    run_cmd "Download of ${2}" curl -fsSL --retry 2 -o "$4" "${KERNEL_STABLE_GIT}/plain/${2}?h=${3}" || {
+        usb_failed "Download of ${2} at ${3} failed" \
+            "check the connection to git.kernel.org and that tag ${3} exists in ${KERNEL_STABLE_GIT}, then run menu 5 again" "$1"
+        return 1
+    }
+    is_kernel_source "$4" || {
+        usb_failed "${2} at ${3} is not kernel source (the server sent another page)" \
+            "check that ${3} is a tag of ${KERNEL_STABLE_GIT}, then run menu 5 again" "$1"
+        return 1
+    }
+}
+
+usb_driver_build() {  # <index> <release> <tag> <work dir>: fetch, build, check and install one driver
+    local i=$1 krel=$2 tag=$3 mod path inc
+    IFS='|' read -r mod _ path <<<"${USB_DRIVERS[$1]}"
+    local dir="${4}/${mod}" dest="/lib/modules/${krel}/updates/${USB_DRIVER_SUBDIR}"
+    mkdir -p "$dir" || { usb_failed "Cannot create ${dir}" "check free space in /tmp, then run menu 5 again" "$i"; return 1; }
+    usb_fetch "$i" "$path" "$tag" "${dir}/${mod}.c" || return 1
+    for inc in $(local_includes "${dir}/${mod}.c"); do
+        usb_fetch "$i" "${path%/*}/${inc}" "$tag" "${dir}/${inc}" || return 1
+    done
+    echo "obj-m := ${mod}.o" >"${dir}/Makefile"
+    run_cmd "Build of ${mod}" make -C "/lib/modules/${krel}/build" M="$dir" modules || {
+        usb_failed "Build of ${mod} against /lib/modules/${krel}/build failed" \
+            "see the build output in ${CMD_LOG}; the kernel headers for ${krel} must be complete" "$i"
+        return 1
+    }
+    local vm; vm="$(modinfo -F vermagic "${dir}/${mod}.ko" 2>/dev/null)"
+    vermagic_matches "$vm" "$krel" || {
+        usb_failed "${mod}.ko was built for '${vm%% *}', not the running kernel ${krel}" \
+            "reinstall the kernel headers for ${krel}, then run menu 5 again" "$i"
+        return 1
+    }
+    run_cmd "Install of ${mod}.ko" install -D -m 0644 "${dir}/${mod}.ko" "${dest}/${mod}.ko" || {
+        usb_failed "Could not install ${mod}.ko into ${dest}" "check that ${dest} is writable, then run menu 5 again" "$i"
+        return 1
+    }
+    info "Built from ${tag} and installed"
+    USB_RESULTS[i]="done"; USB_NOTES[i]="built from ${tag}"
+}
+
+usb_summary() {
+    local i mod sym
+    echo ""
+    echo -e "  ${BOLD}USB adapter drivers for $(uname -r)${NC}"
+    echo -e "  ${DIM}$(printf '─%.0s' $(seq 1 48))${NC}"
+    for i in "${!USB_DRIVERS[@]}"; do
+        mod="${USB_DRIVERS[$i]%%|*}"
+        case "${USB_RESULTS[$i]:-}" in
+            done)    sym="$SYM_OK" ;;
+            skipped) sym="$SYM_SKIP" ;;
+            failed)  sym="$SYM_FAIL" ;;
+            *)       sym="?" ;;
+        esac
+        printf "  %b  %-8s %s\n" "$sym" "$mod" "${USB_NOTES[$i]:-}"
+    done
+    echo -e "  ${DIM}$(printf '─%.0s' $(seq 1 48))${NC}"
+}
+
+run_usb_drivers() {
+    clear
+    print_box "Menu 5: Install USB adapter drivers"
+    print_env
+    echo ""
+    detail "Builds the USB-CAN (gs_usb) and USB-serial (ch341, pl2303) drivers this kernel lacks,"
+    detail "from the upstream source of the same kernel version, downloaded from git.kernel.org."
+    echo ""
+    read -rp "  Continue? (Y/n): " confirm
+    [[ "$confirm" =~ ^[Nn]$ ]] && return
+
+    USB_RESULTS=(); USB_NOTES=()
+    local krel kcfg i mod sym st todo=()
+    krel="$(uname -r)"
+    kcfg="$(zcat /proc/config.gz 2>/dev/null)"
+    echo ""
+    if [[ -z "$kcfg" ]]; then
+        usb_failed "Cannot read the running kernel's configuration (/proc/config.gz)" \
+            "boot a kernel built with CONFIG_IKCONFIG_PROC, then run menu 5 again" "${!USB_DRIVERS[@]}"
+    else
+        for i in "${!USB_DRIVERS[@]}"; do
+            IFS='|' read -r mod sym _ <<<"${USB_DRIVERS[$i]}"
+            st="$(usb_driver_state "$mod" "$sym" "$krel" <<<"$kcfg")"
+            if [[ "$st" == missing ]]; then todo+=("$i"); continue; fi
+            USB_RESULTS[i]="skipped"; USB_NOTES[i]="$(usb_driver_note "$st" "$krel")"
+            skip "${mod}: ${USB_NOTES[$i]}"
+        done
+    fi
+
+    if [[ ${#todo[@]} -gt 0 ]]; then
+        local ver="" work=""
+        if ! kernel_headers_match "These drivers"; then
+            usb_failed "The kernel headers for ${krel} are missing or do not match it (see above)" \
+                "install the kernel headers package of the running kernel, then run menu 5 again" "${todo[@]}"
+        elif ! command -v curl &>/dev/null || ! command -v make &>/dev/null || ! command -v gcc &>/dev/null; then
+            usb_failed "curl, make or gcc is not installed" "sudo apt install curl build-essential, then run menu 5 again" "${todo[@]}"
+        elif ! ver="$(kernel_upstream_version "/lib/modules/${krel}/build/Makefile")"; then
+            usb_failed "Cannot read the kernel version from /lib/modules/${krel}/build/Makefile" \
+                "reinstall the kernel headers for ${krel}, then run menu 5 again" "${todo[@]}"
+        elif ! work="$(mktemp -d /tmp/plem-usb-drivers-XXXXXX)"; then
+            usb_failed "Cannot create a build directory in /tmp" "check free space in /tmp, then run menu 5 again" "${todo[@]}"
+        else
+            detail "Kernel ${krel}: upstream tag v${ver}"
+            for i in "${todo[@]}"; do
+                echo ""; echo -e "  ${BOLD}${USB_DRIVERS[$i]%%|*}${NC}"
+                usb_driver_build "$i" "$krel" "v${ver}" "$work"
+            done
+            rm -rf "$work"
+        fi
+
+        # One depmod for all, then check that modprobe now finds each new module for this kernel.
+        local built=()
+        for i in "${todo[@]}"; do [[ "${USB_RESULTS[$i]}" == "done" ]] && built+=("$i"); done
+        if [[ ${#built[@]} -gt 0 ]]; then
+            echo ""
+            if ! run_cmd "depmod" depmod "$krel"; then
+                usb_failed "depmod ${krel} failed: modprobe does not know the new modules" "run sudo depmod ${krel}" "${built[@]}"
+            else
+                for i in "${built[@]}"; do
+                    IFS='|' read -r mod sym _ <<<"${USB_DRIVERS[$i]}"
+                    [[ "$(usb_driver_state "$mod" "$sym" "$krel" <<<"$kcfg")" == installed ]] \
+                        || usb_failed "${mod} was installed but modinfo -k ${krel} does not find it" \
+                            "check ${CMD_LOG} and /lib/modules/${krel}/updates/${USB_DRIVER_SUBDIR}" "$i"
+                done
+            fi
+        fi
+    fi
+
+    usb_summary
+    if [[ " ${USB_RESULTS[*]} " == *" failed "* ]]; then
+        echo -e "  ${RED}${BOLD}Some drivers are not available.${NC} Fix the cause above and run menu 5 again."
+        echo -e "  ${DIM}Log: ${CMD_LOG}${NC}"
+    else
+        echo -e "  ${GREEN}${BOLD}All drivers are available.${NC} Each one carries its adapters' USB IDs (modinfo -F alias)."
+    fi
+    echo ""
+    read -rp "  Press Enter to return to the menu..." _
+}
+
+# ============================================================================
 #  Main menu
 # ============================================================================
 
@@ -2759,7 +3033,7 @@ main_menu() {
         print_box "Jetson RT Kernel Setup Wizard"
         print_env
 
-        local p1_status p1_en p2_status p2_en p3_status p3_en p4_status p4_en
+        local p1_status p1_en p2_status p2_en p3_status p3_en p4_status p4_en p5_status p5_en
 
         # Phase 1 status
         # Tell apart the reasons for phase1_is_complete=false. If already booted into RT
@@ -2822,11 +3096,19 @@ main_menu() {
             p4_status="${SYM_LOCK} locked ${DIM}(no isolated CPU)${NC}"; p4_en="false"
         fi
 
+        # Menu 5 builds for whichever kernel is running, RT or not.
+        if [[ -z "$(usb_drivers_missing)" ]]; then
+            p5_status="${SYM_OK} done"; p5_en="true"
+        else
+            p5_status="${SYM_READY} ready"; p5_en="true"
+        fi
+
         local items=(
             "1. Install RT kernel (before reboot)"           "$p1_status"  "$p1_en"
             "2. Verify setup (after reboot)"                 "$p2_status"  "$p2_en"
             "3. Install EtherCAT master"                     "$p3_status"  "$p3_en"
             "4. RT jitter load test (cyclictest, 1→5 kHz)"   "$p4_status"  "$p4_en"
+            "5. Install USB adapter drivers (CAN, serial)"   "$p5_status"  "$p5_en"
         )
 
         local choice
@@ -2837,9 +3119,57 @@ main_menu() {
             1) run_phase2 ;;
             2) run_phase3 ;;
             3) run_loadsweep ;;
+            4) run_usb_drivers ;;
             *) clear; exit 0 ;;
         esac
     done
+}
+
+# ============================================================================
+#  Device reporting (docs/telemetry.md)
+# ============================================================================
+
+FLEET_TOOL="${WIZARD_DIR}/../../plem_drive/plem/drive/fleet.py"
+CT_MAX_US="" CT_AVG_US=""
+
+# Asked once. Nothing is collected unless the operator picks Yes.
+fleet_consent() {
+    [[ -f "$FLEET_TOOL" && -t 0 && ! -e /etc/plem/fleet.json && ! -e /etc/plem/license.key ]] || return 0
+    [[ "${PLEM_TELEMETRY:-}" != "off" ]] || return 0
+    local choice
+    while true; do
+        clear
+        python3 "$FLEET_TOOL" notice
+        read -rsN 1000 -t 0.05 _ </dev/tty || true  # keys pressed before the question must not answer it; -n would stop at the first Enter
+        choice=$(select_menu "Yes" "" true "No" "" true "View this device's report" "" true)
+        case "$choice" in
+            0) python3 "$FLEET_TOOL" on >>"$CMD_LOG" 2>&1 || warn "Could not turn device reporting on"; break ;;
+            2) clear; python3 "$FLEET_TOOL" show; read -rp "  Press Enter to go back..." _ ;;
+            *) python3 "$FLEET_TOOL" decline >>"$CMD_LOG" 2>&1 || true; break ;;
+        esac
+    done
+    clear
+    echo "  Optional: get notices about newly validated JetPack versions and early access to PLEM Pro."
+    echo "  WIM may email you about these. Reply to any of them to stop. If device reporting is on,"
+    echo "  the address is linked to this device. Remove it any time: sudo plem-fleet forget-email"
+    local email=""
+    read -rp "  Email (Enter to skip): " email </dev/tty || true
+    if [[ -n "$email" ]]; then
+        python3 "$FLEET_TOOL" contact "$email" >>"$CMD_LOG" 2>&1 || warn "Could not register that address"
+    fi
+}
+
+# Runs on exit. Only step names and results: a failure here never changes the wizard's outcome.
+fleet_report() {
+    [[ -f "$FLEET_TOOL" ]] || return 0
+    (( ${#PHASE1_RESULTS[@]} + ${#P2_LOG[@]} + ${#PHASE3_RESULTS[@]} > 0 )) || return 0
+    local i entry
+    {
+        for i in "${!PHASE1_RESULTS[@]}"; do echo "1|${PHASE1_NAMES[$i]}|${PHASE1_RESULTS[$i]}"; done
+        for entry in "${P2_LOG[@]}"; do echo "2|${entry}"; done
+        for i in "${!PHASE3_RESULTS[@]}"; do echo "3|${PHASE3_NAMES[$i]}|${PHASE3_RESULTS[$i]}"; done
+        [[ -z "$CT_MAX_US" ]] || echo "cyclictest|${CT_MAX_US}|${CT_AVG_US}"
+    } | timeout 15 python3 "$FLEET_TOOL" report-install >>"$CMD_LOG" 2>&1 || true
 }
 
 # ============================================================================
@@ -2868,4 +3198,6 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
+
+fleet_consent
 main_menu

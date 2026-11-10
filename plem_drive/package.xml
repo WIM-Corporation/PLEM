@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>plem_drive</name>
-  <version>0.10.1</version>
+  <version>0.11.0</version>
   <description>CiA 402 servo drives on an EtherCAT bus from one drive model file: the plem-drive command (check, run), the Python client plem.drive, the ros2_control hardware plugin and stream controller, rt_raw_relay, and the drive library under them (the drive model file loader and DriveHost, without ROS).</description>
   <maintainer email="william@wimcorp.co.kr">WIM Inc.</maintainer>
   <license>Apache-2.0</license>
