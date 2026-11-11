@@ -1,23 +1,24 @@
 # PLEM drive layer
 
-**Run EtherCAT servo drives from an NVIDIA Jetson: one YAML file per bus, a real-time loop under ros2_control, and a
-Python client.**
+**PLEM is the Android of robotics: below the app, above the chip.** This repository is its open drive layer. It runs
+EtherCAT servo drives from an NVIDIA Jetson with one YAML file per bus, a real-time loop under ros2_control, and a
+Python client.
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![ROS 2 Jazzy](https://img.shields.io/badge/ROS%202-Jazzy-22314E)](docs/install.md#supported-platform)
 [![Platform: Jetson AGX Orin, JetPack 7.2.1](https://img.shields.io/badge/platform-Jetson%20AGX%20Orin%20%7C%20JetPack%207.2.1-76B900)](docs/install.md#supported-platform)
 
+https://github.com/user-attachments/assets/ab856244-e317-44ce-9701-a43308ef4567
+
+The two-axis example on its bench (35 s, no sound): two servo motors behind gearheads, their outputs joined by a jaw
+coupling. Partway through, the jaw coupling is pulled apart and pushed back together by hand while both outputs turn.
+That is a deliberate test on this bench, not a step of any procedure here.
+
 The PLEM drive layer runs CiA 402 servo drives over EtherCAT (CoE) from a Jetson AGX Orin with a PREEMPT_RT kernel,
 the IgH EtherCAT master (EtherLab's open-source master) and ROS 2 Jazzy. You describe a bus and its drives in one YAML
 file, and `plem drive run` runs that bus under ros2_control on a real-time loop. You write no C++, and you move the
-axes from Python or from any ROS 2 client. It is the open foundation of PLEM, a robot control platform for Jetson
-([below](#part-of-plem)).
-
-[![The bench of the two-axis example: two servo motors behind gearheads, their outputs joined by a jaw coupling
-(video, 35 s)](docs/media/a6b-pair-demo.jpg)](docs/media/a6b-pair-demo.mp4)
-
-The two-axis example on its bench (35 s, no sound). Partway through, the jaw coupling is pulled apart and pushed back
-together by hand while both outputs turn. That is a deliberate test on this bench, not a step of any procedure here.
+axes from Python or from any ROS 2 client. It is the open foundation of PLEM, a robot control platform for Jetson.
+The rest of the platform is PLEM Pro ([below](#plem-pro)).
 
 ## Quick look
 
@@ -114,11 +115,21 @@ flowchart LR
   model file from your drive's documents, citing the source of each value; the bench stays yours
   ([`docs/getting-started.md`](docs/getting-started.md), section 1).
 
-## Part of PLEM
+## PLEM Pro
 
 PLEM is a robot control platform for NVIDIA Jetson. This repository holds the drive layer it is built on: the
 real-time core and the EtherCAT drive control, with one drive model (a Panasonic A6B pair) as the worked example. The
-rest of the platform is not published here; its documentation and release notes are at
+rest of the platform is PLEM Pro, which is not published here. PLEM Pro adds what this repository leaves out:
+
+- joint control beyond the drive's own modes: torque controllers, gravity compensation and hand guiding
+- calibration of cameras to the robot
+- robot-level control: whole robots instead of single axes, with kinematics, motion planning, tools and sensors
+- fleet management across robots and devices
+- support from WIM
+
+Ask about PLEM Pro on the [PLEM product page](https://www.wimcorp.co.kr/en/product/plem) (Request Demo) or
+[contact WIM](https://www.wimcorp.co.kr/en/contact).
+Documentation and release notes for the whole platform are at
 [www.wimcorp.co.kr/plem](https://www.wimcorp.co.kr/plem). PLEM is made by WIM:
 [www.wimcorp.co.kr](https://www.wimcorp.co.kr/en).
 

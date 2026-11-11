@@ -1,0 +1,52 @@
+name: Bug report
+description: Something did not work as the documentation describes.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Security problems go to [SECURITY.md](https://github.com/WIM-Corporation/PLEM/blob/master/SECURITY.md), not to an issue."
+  - type: textarea
+    id: platform
+    attributes:
+      label: Platform
+      description: Output of `cat /etc/nv_tegra_release` and `uname -r`.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: tag
+    attributes:
+      label: Tag you built
+      placeholder: v0.11.0
+    validations:
+      required: true
+  - type: textarea
+    id: ran
+    attributes:
+      label: What you ran
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: drive
+    attributes:
+      label: Drive model file and check output
+      description: For a drive problem, paste the drive model file and the output of `plem drive check --json <file>`.
+      render: yaml
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: As text, not screenshots.
+      render: text

@@ -1,0 +1,49 @@
+name: Drive support request
+description: Ask for a CiA 402 drive to be supported, or tell us about a drive you have run.
+labels: [enhancement]
+body:
+  - type: input
+    id: vendor
+    attributes:
+      label: Drive maker
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Drive model
+    validations:
+      required: true
+  - type: input
+    id: ids
+    attributes:
+      label: EtherCAT vendor ID and product code
+      description: From `ethercat slaves -v`.
+  - type: input
+    id: axes
+    attributes:
+      label: Number of axes on the bus
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Control mode
+      options: [csp (position), csv (velocity), cst (torque), mixed, not sure]
+  - type: input
+    id: tag
+    attributes:
+      label: Tag you built, if any
+      placeholder: v0.11.0
+  - type: textarea
+    id: file
+    attributes:
+      label: Drive model file, if you have one
+      render: yaml
+  - type: textarea
+    id: bench
+    attributes:
+      label: Bench or monitor output, if you ran it
+      render: text
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else

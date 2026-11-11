@@ -115,4 +115,5 @@ bench, the monitor and `plem.drive`, and an end-to-end `plem drive run` over a s
 [`docs/getting-started.md`](../docs/getting-started.md) (the example, `plem drive run`, `plem.drive`, stopping, bench
 and approval, monitoring, the two-axis example), [`docs/cia402-drive-model.md`](../docs/cia402-drive-model.md) (every
 key of the drive model file and where each rule is checked; loader errors cite its sections as "schema §N") and
-[`docs/install.md`](../docs/install.md) (setting up the Jetson).
+[`docs/install.md`](../docs/install.md) (setting up the Jetson). The rest of the platform is PLEM Pro
+([`README.md`](../README.md#plem-pro)).
