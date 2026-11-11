@@ -243,4 +243,5 @@ colcon test && colcon test-result --verbose
   `switch_controllers`), install `sudo apt install ros-jazzy-ros2controlcli`. Without it `ros2` says
   `invalid choice: 'control'`.
 
-Next: [`docs/getting-started.md`](getting-started.md).
+Next: [`docs/getting-started.md`](getting-started.md). The rest of the platform is PLEM Pro
+([`README.md`](../README.md#plem-pro)).

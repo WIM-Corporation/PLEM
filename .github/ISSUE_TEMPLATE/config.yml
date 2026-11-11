@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security problem
+    url: https://github.com/WIM-Corporation/PLEM/security/advisories/new
+    about: Report it privately, not as an issue.
+  - name: PLEM Pro, or a controller with PLEM installed
+    url: https://www.wimcorp.co.kr/en/product/plem
+    about: Joint control beyond the drive layer, calibration, robot-level control, fleet management and support from WIM.

@@ -656,3 +656,6 @@ moves the pair mirrored.
   objects are at +0x800, e.g. 0x6841).
 - **No gravity compensation** and no hand guiding (`free_drive`) in the drive layer.
 - **No IO slaves.** The bus configures only the drives in the file and leaves other slaves unconfigured (PREOP).
+
+Gravity compensation, hand guiding and the rest of the platform come with PLEM Pro, which is not published here
+([`README.md`](../README.md#plem-pro)).
