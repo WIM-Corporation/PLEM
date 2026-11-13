@@ -129,6 +129,11 @@ rest of the platform is PLEM Pro, which is not published here. PLEM Pro adds wha
 
 Ask about PLEM Pro on the [PLEM product page](https://www.wimcorp.co.kr/en/product/plem) (Request Demo) or
 [contact WIM](https://www.wimcorp.co.kr/en/contact).
+
+Building a robot on Jetson? Bring it to us. In three working days, remotely or at your site, we put PLEM on your
+robot and show you before-and-after numbers measured on your own hardware:
+[the 3-day bring-up](https://wimrobotics.com/#bringup).
+
 Documentation and release notes for the whole platform are at
 [www.wimcorp.co.kr/plem](https://www.wimcorp.co.kr/plem). PLEM is made by WIM:
 [www.wimcorp.co.kr](https://www.wimcorp.co.kr/en).
