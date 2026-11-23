@@ -4,6 +4,9 @@
 EtherCAT servo drives from an NVIDIA Jetson with one YAML file per bus, a real-time loop under ros2_control, and a
 Python client.
 
+**▶ [Watch the full install in 6 minutes](https://youtu.be/WqD9-lvNSII):** a blank Jetson AGX Orin, JetPack 7.2.1, the
+setup wizard, the build, and two EtherCAT servo axes moving (YouTube, no sound).
+
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![ROS 2 Jazzy](https://img.shields.io/badge/ROS%202-Jazzy-22314E)](docs/install.md#supported-platform)
 [![Platform: Jetson AGX Orin, JetPack 7.2.1](https://img.shields.io/badge/platform-Jetson%20AGX%20Orin%20%7C%20JetPack%207.2.1-76B900)](docs/install.md#supported-platform)
